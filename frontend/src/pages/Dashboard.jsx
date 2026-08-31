@@ -1,338 +1,137 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import api from "../services/api";
+import { Link } from "react-router-dom";
+import { FolderKanban, Users } from "lucide-react";
+import { ErrorState, SkeletonRows } from "../components/ui/Feedback";
+import { StatusBadge } from "../components/ui/StatusBadge";
+import { useAuth } from "../context/AuthContext";
+import api, { getErrorMessage } from "../services/api";
+
+function StatCard({ label, value, href }) {
+  return (
+    <Link
+      to={href}
+      className="block rounded-md border border-line bg-surface p-4 hover:border-accent"
+    >
+      <p className="text-sm text-muted">{label}</p>
+      <p className="mt-2 text-3xl font-semibold tabular-nums text-ink">{value}</p>
+    </Link>
+  );
+}
 
 function Dashboard() {
+  const { user } = useAuth();
   const [customers, setCustomers] = useState([]);
-  const [editingId, setEditingId] = useState(null);
+  const [cases, setCases] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    company: "",
-  });
+  const load = async () => {
+    setLoading(true);
+    setError("");
 
-  const navigate = useNavigate();
-
-  // GET all customers
-  const getCustomers = async () => {
     try {
-      const token = localStorage.getItem("token");
-
-      const response = await api.get("/customers", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      setCustomers(response.data.data);
-    } catch (error) {
-      console.log(error);
+      const [customerRes, caseRes] = await Promise.all([
+        api.get("/customers"),
+        api.get("/cases"),
+      ]);
+      setCustomers(customerRes.data.data || []);
+      setCases(caseRes.data.data || []);
+    } catch (err) {
+      setError(getErrorMessage(err, "Could not load dashboard data."));
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    getCustomers();
+    load();
   }, []);
 
-  // Handle form input
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  // ADD or UPDATE customer
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    try {
-      const token = localStorage.getItem("token");
-
-      const config = {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      };
-
-      if (editingId) {
-        // UPDATE customer
-        await api.patch(
-          `/customers/${editingId}`,
-          formData,
-          config
-        );
-
-        alert("Customer updated successfully");
-      } else {
-        // ADD customer
-        await api.post(
-          "/customers",
-          formData,
-          config
-        );
-
-        alert("Customer added successfully");
-      }
-
-      // Clear form
-      setFormData({
-        name: "",
-        email: "",
-        phone: "",
-        company: "",
-      });
-
-      setEditingId(null);
-
-      getCustomers();
-
-    } catch (error) {
-      alert(
-        error.response?.data?.message ||
-        "Operation failed"
-      );
-    }
-  };
-
-  // EDIT customer
-  const handleEdit = (customer) => {
-    setEditingId(customer._id);
-
-    setFormData({
-      name: customer.name || "",
-      email: customer.email || "",
-      phone: customer.phone || "",
-      company: customer.company || "",
-    });
-  };
-
-  // DELETE customer
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this customer?")) {
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem("token");
-
-      await api.delete(`/customers/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      alert("Customer deleted successfully");
-
-      getCustomers();
-    } catch (error) {
-      alert("Failed to delete customer");
-    }
-  };
-
-  // Cancel editing
-  const handleCancel = () => {
-    setEditingId(null);
-
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      company: "",
-    });
-  };
-
-  // Logout
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    navigate("/");
-  };
+  const openCases = cases.filter((item) => item.status !== "Closed");
+  const recentCases = [...cases]
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    .slice(0, 5);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
+    <div className="space-y-6">
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
+        <p className="mt-1 text-sm text-muted">
+          {user?.name ? `Welcome back, ${user.name}.` : "A snapshot of customers and open work."}
+        </p>
+      </header>
 
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">
-            Dashboard
-          </h1>
+      {loading ? (
+        <SkeletonRows count={4} />
+      ) : error ? (
+        <ErrorState message={error} onRetry={load} />
+      ) : (
+        <>
+          <section aria-label="Summary" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <StatCard label="Customers" value={customers.length} href="/customers" />
+            <StatCard label="Open cases" value={openCases.length} href="/cases" />
+            <StatCard label="All cases" value={cases.length} href="/cases" />
+          </section>
 
-          <p className="text-gray-500">
-            Manage your customers
-          </p>
-        </div>
+          <section className="rounded-md border border-line bg-surface">
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <h2 className="text-sm font-semibold">Recent cases</h2>
+              <Link to="/cases" className="text-sm font-medium text-accent hover:underline">
+                View all
+              </Link>
+            </div>
 
-        <button
-          onClick={handleLogout}
-          className="rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600"
-        >
-          Logout
-        </button>
-      </div>
-
-      {/* Add / Update Form */}
-      <div className="mb-6 rounded-lg bg-white p-6 shadow">
-
-        <h2 className="mb-4 text-xl font-semibold">
-          {editingId
-            ? "Update Customer"
-            : "Add Customer"}
-        </h2>
-
-        <form
-          onSubmit={handleSubmit}
-          className="grid grid-cols-1 gap-4 md:grid-cols-2"
-        >
-
-          <input
-            type="text"
-            name="name"
-            placeholder="Name"
-            value={formData.name}
-            onChange={handleChange}
-            required
-            className="rounded border p-3"
-          />
-
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            className="rounded border p-3"
-          />
-
-          <input
-            type="text"
-            name="phone"
-            placeholder="Phone"
-            value={formData.phone}
-            onChange={handleChange}
-            required
-            className="rounded border p-3"
-          />
-
-          <input
-            type="text"
-            name="company"
-            placeholder="Company"
-            value={formData.company}
-            onChange={handleChange}
-            className="rounded border p-3"
-          />
-
-          <div className="flex gap-3 md:col-span-2">
-
-            <button
-              type="submit"
-              className="rounded bg-blue-500 px-6 py-3 text-white hover:bg-blue-600"
-            >
-              {editingId
-                ? "Update Customer"
-                : "Add Customer"}
-            </button>
-
-            {editingId && (
-              <button
-                type="button"
-                onClick={handleCancel}
-                className="rounded bg-gray-500 px-6 py-3 text-white hover:bg-gray-600"
-              >
-                Cancel
-              </button>
-            )}
-
-          </div>
-
-        </form>
-      </div>
-
-      {/* Customer List */}
-      <div className="rounded-lg bg-white p-6 shadow">
-
-        <h2 className="mb-4 text-xl font-semibold">
-          Customers
-        </h2>
-
-        {customers.length === 0 ? (
-          <p className="text-gray-500">
-            No customers found
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-
-            <table className="w-full border-collapse">
-
-              <thead>
-                <tr className="bg-gray-100 text-left">
-                  <th className="border p-3">Name</th>
-                  <th className="border p-3">Email</th>
-                  <th className="border p-3">Phone</th>
-                  <th className="border p-3">Company</th>
-                  <th className="border p-3">Action</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {customers.map((customer) => (
-                  <tr key={customer._id}>
-
-                    <td className="border p-3">
-                      {customer.name}
-                    </td>
-
-                    <td className="border p-3">
-                      {customer.email}
-                    </td>
-
-                    <td className="border p-3">
-                      {customer.phone}
-                    </td>
-
-                    <td className="border p-3">
-                      {customer.company}
-                    </td>
-
-                    <td className="border p-3">
-                      <div className="flex gap-2">
-
-                        <button
-                          onClick={() =>
-                            handleEdit(customer)
-                          }
-                          className="rounded bg-yellow-500 px-3 py-1 text-white"
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            handleDelete(customer._id)
-                          }
-                          className="rounded bg-red-500 px-3 py-1 text-white"
-                        >
-                          Delete
-                        </button>
-
-                      </div>
-                    </td>
-
-                  </tr>
+            {recentCases.length === 0 ? (
+              <div className="px-4 py-10 text-center">
+                <FolderKanban className="mx-auto h-8 w-8 text-muted" aria-hidden="true" />
+                <p className="mt-2 text-sm text-muted">No cases yet. Open one from the Cases page.</p>
+              </div>
+            ) : (
+              <ul role="list" className="divide-y divide-line">
+                {recentCases.map((item) => (
+                  <li key={item._id} className="flex flex-wrap items-center gap-2 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{item.title}</p>
+                      <p className="truncate text-xs text-muted">
+                        {item.customer?.name || "Unknown customer"}
+                      </p>
+                    </div>
+                    <StatusBadge value={item.priority} />
+                    <StatusBadge value={item.status} />
+                  </li>
                 ))}
-              </tbody>
+              </ul>
+            )}
+          </section>
 
-            </table>
+          <section className="rounded-md border border-line bg-surface">
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <h2 className="text-sm font-semibold">Customers</h2>
+              <Link to="/customers" className="text-sm font-medium text-accent hover:underline">
+                Manage
+              </Link>
+            </div>
 
-          </div>
-        )}
-
-      </div>
-
+            {customers.length === 0 ? (
+              <div className="px-4 py-10 text-center">
+                <Users className="mx-auto h-8 w-8 text-muted" aria-hidden="true" />
+                <p className="mt-2 text-sm text-muted">Add a customer to start tracking work.</p>
+              </div>
+            ) : (
+              <ul role="list" className="divide-y divide-line">
+                {customers.slice(0, 6).map((customer) => (
+                  <li key={customer._id} className="px-4 py-3">
+                    <p className="text-sm font-medium">{customer.name}</p>
+                    <p className="text-xs text-muted">
+                      {[customer.company, customer.email].filter(Boolean).join(" · ")}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 }

@@ -16,6 +16,20 @@ A full-stack CRM application built using the MERN stack.
 - Error handling
 - REST API development
 
+## Features
+
+### Backend
+- User registration
+- User login
+- JWT authentication
+- Password hashing using bcrypt
+- Customer CRUD operations
+- Case CRUD operations
+- MongoDB database integration
+- Input validation
+- Error handling
+- REST API development
+
 ### Frontend
 - User registration and login
 - Customer dashboard

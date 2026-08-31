@@ -1,103 +1,92 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import api from "../services/api";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { AuthShell } from "../components/layout/AuthShell";
+import { Button } from "../components/ui/Button";
+import { FormBanner } from "../components/ui/Feedback";
+import { TextInput } from "../components/ui/Field";
+import { useAuth } from "../context/AuthContext";
+import { getErrorMessage } from "../services/api";
 
 function Login() {
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
-
+  const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const registered = Boolean(location.state?.registered);
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+  const handleChange = (event) => {
+    setFormData((current) => ({
+      ...current,
+      [event.target.name]: event.target.value,
+    }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setSubmitting(true);
 
     try {
-      const response = await api.post("/auth/login", formData);
-
-      localStorage.setItem("token", response.data.token);
-
-      alert("Login successful");
-
+      await login(formData);
       navigate("/dashboard");
-    } catch (error) {
-      alert(
-        error.response?.data?.message || "Login failed"
-      );
+    } catch (err) {
+      setError(getErrorMessage(err, "Login failed. Check your email and password."));
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
-      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow">
-        <h1 className="mb-2 text-center text-3xl font-bold text-gray-800">
-          Login
-        </h1>
-
-        <p className="mb-6 text-center text-gray-500">
-          Login to your account
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-gray-700">
-              Email
-            </label>
-
-            <input
-              type="email"
-              name="email"
-              placeholder="Enter your email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              className="w-full rounded border p-3 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-gray-700">
-              Password
-            </label>
-
-            <input
-              type="password"
-              name="password"
-              placeholder="Enter your password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              className="w-full rounded border p-3 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full rounded bg-blue-500 py-3 font-medium text-white hover:bg-blue-600"
+    <AuthShell title="Sign in" subtitle="Use your work email to open the CRM.">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {registered && !error ? (
+          <p
+            role="status"
+            className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-ok"
           >
-            Login
-          </button>
-        </form>
+            Account created. Sign in to continue.
+          </p>
+        ) : null}
+        <FormBanner>{error}</FormBanner>
 
-        <p className="mt-5 text-center text-gray-600">
-          Don't have an account?{" "}
-          <Link
-            to="/register"
-            className="font-medium text-blue-500 hover:underline"
-          >
-            Register
-          </Link>
-        </p>
-      </div>
-    </div>
+        <TextInput
+          id="email"
+          name="email"
+          type="email"
+          label="Email"
+          autoComplete="email"
+          placeholder="you@company.com"
+          value={formData.email}
+          onChange={handleChange}
+          required
+        />
+
+        <TextInput
+          id="password"
+          name="password"
+          type="password"
+          label="Password"
+          autoComplete="current-password"
+          placeholder="Enter your password"
+          value={formData.password}
+          onChange={handleChange}
+          required
+        />
+
+        <Button type="submit" className="w-full" disabled={submitting}>
+          {submitting ? "Signing in…" : "Sign in"}
+        </Button>
+      </form>
+
+      <p className="mt-5 text-center text-sm text-muted">
+        Need an account?{" "}
+        <Link to="/register" className="font-medium text-accent hover:underline">
+          Create one
+        </Link>
+      </p>
+    </AuthShell>
   );
 }
 

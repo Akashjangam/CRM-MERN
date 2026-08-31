@@ -1,129 +1,103 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import api from "../services/api";
+import { AuthShell } from "../components/layout/AuthShell";
+import { Button } from "../components/ui/Button";
+import { FormBanner } from "../components/ui/Feedback";
+import { TextInput } from "../components/ui/Field";
+import { useAuth } from "../context/AuthContext";
+import { getErrorMessage } from "../services/api";
 
 function Register() {
+  const { register } = useAuth();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
   });
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const navigate = useNavigate();
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+  const handleChange = (event) => {
+    setFormData((current) => ({
+      ...current,
+      [event.target.name]: event.target.value,
+    }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setSubmitting(true);
 
     try {
-      const response = await api.post(
-        "/auth/register",
-        formData
-      );
-
-      alert(
-        response.data.message || "Registration successful"
-      );
-
-      navigate("/");
-    } catch (error) {
-      alert(
-        error.response?.data?.message ||
-          "Registration failed"
-      );
+      await register(formData);
+      navigate("/", { state: { registered: true } });
+    } catch (err) {
+      setError(getErrorMessage(err, "Registration failed. Try a different email."));
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
-      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-md">
-        
-        <h1 className="text-center text-3xl font-bold text-gray-800">
-          Register
-        </h1>
+    <AuthShell
+      title="Create an account"
+      subtitle="Register to manage customers and support cases."
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <FormBanner>{error}</FormBanner>
 
-        <p className="mt-2 text-center text-gray-500">
-          Create your account
-        </p>
+        <TextInput
+          id="name"
+          name="name"
+          type="text"
+          label="Name"
+          autoComplete="name"
+          placeholder="Alex Rivera"
+          value={formData.name}
+          onChange={handleChange}
+          required
+        />
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          
-          <div>
-            <label className="mb-1 block text-gray-700">
-              Name
-            </label>
+        <TextInput
+          id="email"
+          name="email"
+          type="email"
+          label="Email"
+          autoComplete="email"
+          placeholder="you@company.com"
+          value={formData.email}
+          onChange={handleChange}
+          required
+        />
 
-            <input
-              type="text"
-              name="name"
-              placeholder="Enter your name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="w-full rounded-md border border-gray-300 p-3 outline-none focus:border-blue-500"
-            />
-          </div>
+        <TextInput
+          id="password"
+          name="password"
+          type="password"
+          label="Password"
+          autoComplete="new-password"
+          hint="At least 6 characters."
+          placeholder="Create a password"
+          minLength={6}
+          value={formData.password}
+          onChange={handleChange}
+          required
+        />
 
-          <div>
-            <label className="mb-1 block text-gray-700">
-              Email
-            </label>
+        <Button type="submit" className="w-full" disabled={submitting}>
+          {submitting ? "Creating account…" : "Create account"}
+        </Button>
+      </form>
 
-            <input
-              type="email"
-              name="email"
-              placeholder="Enter your email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              className="w-full rounded-md border border-gray-300 p-3 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-gray-700">
-              Password
-            </label>
-
-            <input
-              type="password"
-              name="password"
-              placeholder="Enter your password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              className="w-full rounded-md border border-gray-300 p-3 outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full rounded-md bg-blue-500 py-3 font-medium text-white hover:bg-blue-600"
-          >
-            Register
-          </button>
-
-        </form>
-
-        <p className="mt-5 text-center text-gray-600">
-          Already have an account?{" "}
-          
-          <Link
-            to="/"
-            className="font-medium text-blue-500 hover:underline"
-          >
-            Login
-          </Link>
-        </p>
-
-      </div>
-    </div>
+      <p className="mt-5 text-center text-sm text-muted">
+        Already registered?{" "}
+        <Link to="/" className="font-medium text-accent hover:underline">
+          Sign in
+        </Link>
+      </p>
+    </AuthShell>
   );
 }
 

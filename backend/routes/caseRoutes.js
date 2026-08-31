@@ -1,4 +1,5 @@
 import express from "express";
+import authMiddleware from "../middleware/authMiddleware.js";
 
 import {
   getCases,
@@ -9,16 +10,11 @@ import {
 
 const router = express.Router();
 
-// Get all cases
+router.use(authMiddleware);
+
 router.get("/", getCases);
-
-// Create a new case
 router.post("/", createCase);
-
-// Update a case
 router.patch("/:id", updateCase);
-
-// Delete a case
 router.delete("/:id", deleteCase);
 
 export default router;
