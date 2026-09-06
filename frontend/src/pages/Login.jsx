@@ -46,7 +46,6 @@ export default function Login() {
       [field]: value,
     }));
 
-    // Remove login error while user is typing
     if (error) {
       setError("");
     }
@@ -65,39 +64,104 @@ export default function Login() {
     const email = form.email.trim();
     const password = form.password;
 
+    /* ----------------------------------------------------
+       VALIDATION
+       ---------------------------------------------------- */
+
     if (!email) {
-      setError("Please enter your email address.");
+      setError(
+        "Please enter your email address."
+      );
       return;
     }
 
     if (!password) {
-      setError("Please enter your password.");
+      setError(
+        "Please enter your password."
+      );
       return;
     }
 
     setLoading(true);
 
     try {
-      await login({
+      /* --------------------------------------------------
+         CALL LOGIN API
+         -------------------------------------------------- */
+
+      const data = await login({
         email,
         password,
       });
 
-      /*
-       * Login successful
-       * Redirect to dashboard
-       */
-      navigate("/dashboard", {
-        replace: true,
-      });
+
+      /* --------------------------------------------------
+         DEBUG / VERIFICATION
+         -------------------------------------------------- */
+
+      console.log(
+        "LOGIN SUCCESS:",
+        data
+      );
+
+      console.log(
+        "TOKEN STORED:",
+        localStorage.getItem("token")
+          ? "YES"
+          : "NO"
+      );
+
+      console.log(
+        "USER STORED:",
+        localStorage.getItem("user")
+      );
+
+
+      /* --------------------------------------------------
+         VERIFY TOKEN WAS STORED
+         -------------------------------------------------- */
+
+      const storedToken =
+        localStorage.getItem("token");
+
+      if (!storedToken) {
+        setError(
+          "Login succeeded, but authentication token was not stored. Please try again."
+        );
+
+        return;
+      }
+
+
+      /* --------------------------------------------------
+         REDIRECT
+         -------------------------------------------------- */
+
+      const redirectPath =
+        location.state?.from?.pathname ||
+        "/dashboard";
+
+      navigate(
+        redirectPath,
+        {
+          replace: true,
+        }
+      );
 
     } catch (err) {
+
+      console.error(
+        "LOGIN ERROR:",
+        err
+      );
+
       setError(
         getErrorMessage(
           err,
           "Login failed. Check your email and password."
         )
       );
+
     } finally {
       setLoading(false);
     }
@@ -131,38 +195,50 @@ export default function Login() {
 
 
           <p>
-            A focused CRM workspace for managing
-            customers, support cases, assignments,
-            and interaction history.
+            A focused CRM workspace for
+            managing customers, support cases,
+            assignments, and interaction history.
           </p>
 
 
           <div className="auth-feature-list">
 
+            {/* Customer records */}
+
             <div className="auth-feature">
+
               <span>
                 <Users size={15} />
               </span>
 
               Customer records in one workspace
+
             </div>
 
 
+            {/* Secure access */}
+
             <div className="auth-feature">
+
               <span>
                 <ShieldCheck size={15} />
               </span>
 
               Secure authenticated access
+
             </div>
 
 
+            {/* Case tracking */}
+
             <div className="auth-feature">
+
               <span>
                 <Zap size={15} />
               </span>
 
               Track cases and follow-ups faster
+
             </div>
 
           </div>
@@ -180,7 +256,9 @@ export default function Login() {
 
         <div className="auth-card">
 
-          {/* Logo */}
+          {/* =================================================
+              LOGO
+              ================================================= */}
 
           <div className="auth-logo-row">
 
@@ -195,7 +273,9 @@ export default function Login() {
           </div>
 
 
-          {/* Header */}
+          {/* =================================================
+              HEADER
+              ================================================= */}
 
           <div className="auth-header">
 
@@ -215,45 +295,67 @@ export default function Login() {
           </div>
 
 
-          {/* Registration Success */}
+          {/* =================================================
+              REGISTRATION SUCCESS
+              ================================================= */}
 
           {registered && !error && (
+
             <div
               className="banner banner-success"
-              style={{ marginBottom: 16 }}
+              style={{
+                marginBottom: 16,
+              }}
               role="status"
             >
-              <CheckCircle2 size={15} />
+
+              <CheckCircle2
+                size={15}
+                aria-hidden="true"
+              />
 
               <span>
                 Account created successfully.
                 Sign in to continue.
               </span>
+
             </div>
+
           )}
 
 
-          {/* Login Error */}
+          {/* =================================================
+              LOGIN ERROR
+              ================================================= */}
 
           {error && (
+
             <div
               className="banner banner-error"
-              style={{ marginBottom: 16 }}
+              style={{
+                marginBottom: 16,
+              }}
               role="alert"
             >
               {error}
             </div>
+
           )}
 
 
-          {/* Login Form */}
+          {/* =================================================
+              LOGIN FORM
+              ================================================= */}
 
           <form
             className="auth-form"
             onSubmit={submit}
+            noValidate
           >
 
-            {/* Email */}
+            {/* =================================================
+                EMAIL
+                ================================================= */}
 
             <div className="field">
 
@@ -266,6 +368,7 @@ export default function Login() {
 
               <input
                 id="login-email"
+                name="email"
                 type="email"
                 autoComplete="email"
                 placeholder="you@company.com"
@@ -283,7 +386,9 @@ export default function Login() {
             </div>
 
 
-            {/* Password */}
+            {/* =================================================
+                PASSWORD
+                ================================================= */}
 
             <div className="field">
 
@@ -296,6 +401,7 @@ export default function Login() {
 
               <input
                 id="login-password"
+                name="password"
                 type="password"
                 autoComplete="current-password"
                 placeholder="Enter your password"
@@ -313,7 +419,9 @@ export default function Login() {
             </div>
 
 
-            {/* Submit */}
+            {/* =================================================
+                SUBMIT BUTTON
+                ================================================= */}
 
             <button
               type="submit"
@@ -322,16 +430,22 @@ export default function Login() {
             >
 
               {loading ? (
+
                 <>
+
                   <span
                     className="spinner"
                     aria-hidden="true"
                   />
 
                   Signing in…
+
                 </>
+
               ) : (
+
                 "Sign in"
+
               )}
 
             </button>
@@ -339,7 +453,9 @@ export default function Login() {
           </form>
 
 
-          {/* Footer */}
+          {/* =================================================
+              FOOTER
+              ================================================= */}
 
           <div className="auth-footer">
 
