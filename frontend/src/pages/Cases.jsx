@@ -1,20 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  FolderKanban,
-  Pencil,
-  Plus,
-  Search,
-  Trash2,
-} from "lucide-react";
+
+import { FolderKanban, Pencil, Plus, Search, Trash2 } from "lucide-react";
 
 import api, { getErrorMessage } from "../services/api";
 
 import { Button } from "../components/ui/Button";
-import {
-  Select,
-  TextArea,
-  TextInput,
-} from "../components/ui/Field";
+
+import { Select, TextArea, TextInput } from "../components/ui/Field";
 
 import {
   Banner,
@@ -24,10 +16,10 @@ import {
 } from "../components/ui/Feedback";
 
 import { StatusBadge } from "../components/ui/StatusBadge";
+
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 
 import { useAuth } from "../context/AuthContext";
-
 
 /* =========================================================
    INITIAL FORM
@@ -39,8 +31,8 @@ const blank = {
   description: "",
   priority: "Medium",
   status: "Open",
+  assignedTo: "",
 };
-
 
 /* =========================================================
    CASES PAGE
@@ -49,20 +41,30 @@ const blank = {
 export default function Cases() {
   const { user } = useAuth();
 
+  /* =======================================================
+     STATE
+     ======================================================= */
+
   const [items, setItems] = useState([]);
+
   const [customers, setCustomers] = useState([]);
+
+  const [agents, setAgents] = useState([]);
 
   const [form, setForm] = useState(blank);
 
   const [edit, setEdit] = useState(null);
 
   const [query, setQuery] = useState("");
+
   const [status, setStatus] = useState("All");
 
   const [loading, setLoading] = useState(true);
+
   const [error, setError] = useState("");
 
   const [formError, setFormError] = useState("");
+
   const [saving, setSaving] = useState(false);
 
   const [open, setOpen] = useState(false);
@@ -75,59 +77,92 @@ export default function Cases() {
 
   const role = user?.role || "";
 
-  const canCreate =
-    ["admin", "agent", "customer"].includes(role);
+  const isAdmin = role === "admin";
 
-  const canEdit =
-    ["admin", "agent", "customer"].includes(role);
+  const isAgent = role === "agent";
 
-  const canDelete =
-    ["admin", "agent"].includes(role);
+  const isCustomer = role === "customer";
 
+  const canCreate = ["admin", "agent", "customer"].includes(role);
+
+  const canEdit = ["admin", "agent", "customer"].includes(role);
+
+  const canDelete = ["admin", "agent"].includes(role);
 
   /* =======================================================
      LOAD CASES
      ======================================================= */
 
-  const load = async () => {
+  const loadCases = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const [casesResponse, customersResponse] =
-        await Promise.all([
-          api.get("/cases"),
-          api.get("/customers"),
-        ]);
+      const response = await api.get("/cases");
 
-      setItems(
-        casesResponse.data?.data || []
-      );
-
-      setCustomers(
-        customersResponse.data?.data || []
-      );
+      setItems(response.data?.data || []);
     } catch (error) {
-      setError(
-        getErrorMessage(
-          error,
-          "Could not load cases."
-        )
-      );
+      setError(getErrorMessage(error, "Could not load cases."));
     } finally {
       setLoading(false);
     }
   };
 
+  /* =======================================================
+     LOAD CUSTOMERS
+     ======================================================= */
+
+  const loadCustomers = async () => {
+    /*
+     * Customers don't need the customer list.
+     * Admins and agents can select customers.
+     */
+
+    if (isCustomer) {
+      return;
+    }
+
+    try {
+      const response = await api.get("/customers");
+
+      setCustomers(response.data?.data || []);
+    } catch (error) {
+      console.error("Could not load customers:", error);
+    }
+  };
+
+  /* =======================================================
+     LOAD AGENTS
+     ======================================================= */
+
+  const loadAgents = async () => {
+    /*
+     * Only admin and agents need
+     * assignment information.
+     */
+
+    if (!isAdmin && !isAgent) {
+      return;
+    }
+
+    try {
+      const response = await api.get("/cases/agents");
+
+      setAgents(response.data?.data || []);
+    } catch (error) {
+      console.error("Could not load agents:", error);
+    }
+  };
 
   /* =======================================================
      INITIAL LOAD
      ======================================================= */
 
   useEffect(() => {
-    load();
-  }, []);
-
+    loadCases();
+    loadCustomers();
+    loadAgents();
+  }, [role]);
 
   /* =======================================================
      FILTER CASES
@@ -137,27 +172,34 @@ export default function Cases() {
     const search = query.trim().toLowerCase();
 
     return items.filter((item) => {
-      const matchesStatus =
-        status === "All" ||
-        item.status === status;
+      const matchesStatus = status === "All" || item.status === status;
 
       const searchableText = [
         item.title,
         item.description,
         item.customer?.name,
+        item.assignedTo?.name,
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
 
-      const matchesSearch =
-        !search ||
-        searchableText.includes(search);
+      const matchesSearch = !search || searchableText.includes(search);
 
       return matchesStatus && matchesSearch;
     });
   }, [items, query, status]);
 
+  /* =======================================================
+     UPDATE FORM FIELD
+     ======================================================= */
+
+  const updateForm = (field, value) => {
+    setForm((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+  };
 
   /* =======================================================
      OPEN NEW CASE
@@ -168,13 +210,15 @@ export default function Cases() {
 
     setForm({
       ...blank,
-      customer: customers[0]?._id || "",
+
+      customer: isCustomer ? "" : customers[0]?._id || "",
+
+      assignedTo: "",
     });
 
     setFormError("");
     setOpen(true);
   };
-
 
   /* =======================================================
      EDIT CASE
@@ -184,27 +228,22 @@ export default function Cases() {
     setEdit(item._id);
 
     setForm({
-      customer:
-        item.customer?._id ||
-        item.customer ||
-        "",
+      customer: item.customer?._id || item.customer || "",
 
       title: item.title || "",
 
-      description:
-        item.description || "",
+      description: item.description || "",
 
-      priority:
-        item.priority || "Medium",
+      priority: item.priority || "Medium",
 
-      status:
-        item.status || "Open",
+      status: item.status || "Open",
+
+      assignedTo: item.assignedTo?._id || item.assignedTo || "",
     });
 
     setFormError("");
     setOpen(true);
   };
-
 
   /* =======================================================
      CLOSE FORM
@@ -221,7 +260,6 @@ export default function Cases() {
     setFormError("");
   };
 
-
   /* =======================================================
      SAVE CASE
      ======================================================= */
@@ -233,62 +271,95 @@ export default function Cases() {
     setFormError("");
 
     try {
+      /* ---------------------------------------------------
+         VALIDATION
+         --------------------------------------------------- */
+
       if (!form.title.trim()) {
         setFormError("Case title is required.");
         return;
       }
 
       if (!form.description.trim()) {
-        setFormError(
-          "Case description is required."
-        );
+        setFormError("Case description is required.");
         return;
       }
 
-      if (!form.customer) {
-        setFormError(
-          "Please select a customer."
-        );
+      /*
+       * Admin and Agent need a customer.
+       *
+       * Customer accounts are automatically
+       * connected to their own customer profile
+       * by the backend.
+       */
+
+      if (!isCustomer && !form.customer) {
+        setFormError("Please select a customer.");
         return;
       }
+
+      /* ---------------------------------------------------
+         BUILD PAYLOAD
+         --------------------------------------------------- */
 
       const payload = {
-        customer: form.customer,
         title: form.title.trim(),
+
         description: form.description.trim(),
+
         priority: form.priority,
+
         status: form.status,
       };
 
-      if (edit) {
-        await api.patch(
-          `/cases/${edit}`,
-          payload
-        );
-      } else {
-        await api.post(
-          "/cases",
-          payload
-        );
+      /*
+       * Only send customer when admin/agent
+       * selected one.
+       */
+
+      if (!isCustomer && form.customer) {
+        payload.customer = form.customer;
       }
+
+      /*
+       * Assignment
+       */
+
+      if ((isAdmin || isAgent) && form.assignedTo) {
+        payload.assignedTo = form.assignedTo;
+      }
+
+      /* ---------------------------------------------------
+         CREATE
+         --------------------------------------------------- */
+
+      if (!edit) {
+        await api.post("/cases", payload);
+      } else {
+        /* ---------------------------------------------------
+         UPDATE
+         --------------------------------------------------- */
+        await api.patch(`/cases/${edit}`, payload);
+      }
+
+      /* ---------------------------------------------------
+         SUCCESS
+         --------------------------------------------------- */
 
       setOpen(false);
       setEdit(null);
       setForm(blank);
+      setFormError("");
 
-      await load();
+      await loadCases();
     } catch (error) {
-      setFormError(
-        getErrorMessage(
-          error,
-          "Could not save case."
-        )
-      );
+      console.error("CASE SAVE ERROR:", error);
+
+      setFormError(getErrorMessage(error, "Could not save case."));
     } finally {
       setSaving(false);
     }
   };
-
 
   /* =======================================================
      DELETE CASE
@@ -300,25 +371,17 @@ export default function Cases() {
     }
 
     try {
-      await api.delete(
-        `/cases/${remove._id}`
-      );
+      await api.delete(`/cases/${remove._id}`);
 
       setRemove(null);
 
-      await load();
+      await loadCases();
     } catch (error) {
-      setError(
-        getErrorMessage(
-          error,
-          "Could not delete case."
-        )
-      );
+      setError(getErrorMessage(error, "Could not delete case."));
 
       setRemove(null);
     }
   };
-
 
   /* =======================================================
      RENDER
@@ -326,235 +389,190 @@ export default function Cases() {
 
   return (
     <div className="page">
-
-      {/* ===================================================
+      {/* ==================================================
           HEADER
-          =================================================== */}
+          ================================================== */}
 
       <header className="page-header">
-
         <div>
-          <h1 className="page-title">
-            Cases
-          </h1>
+          <h1 className="page-title">Cases</h1>
 
           <p className="page-subtitle">
-            Create, prioritize, update, and track
-            customer support cases.
+            Create, prioritize, update, assign, and track customer support
+            cases.
           </p>
         </div>
-
 
         {canCreate && (
           <Button
             onClick={openNewCase}
-            disabled={!customers.length}
+            disabled={!isCustomer && !customers.length}
           >
             <Plus size={17} />
             New case
           </Button>
         )}
-
       </header>
 
+      {/* ==================================================
+          CUSTOMER WARNING
+          ================================================== */}
 
-      {/* ===================================================
-          NO CUSTOMER
-          =================================================== */}
+      {!isCustomer && !customers.length && !loading && (
+        <div
+          className="banner banner-warning"
+          style={{
+            marginBottom: 18,
+          }}
+        >
+          Add a customer before opening a case.
+        </div>
+      )}
 
-      {!customers.length &&
-        !loading && (
-          <div
-            className="banner banner-warning"
-            style={{ marginBottom: 18 }}
-          >
-            Add a customer before opening a case.
-          </div>
-        )}
-
-
-      {/* ===================================================
+      {/* ==================================================
           FORM
-          =================================================== */}
+          ================================================== */}
 
       {open && (
         <div
           className="card"
-          style={{ marginBottom: 18 }}
+          style={{
+            marginBottom: 18,
+          }}
         >
-
           <div className="card-header">
-            <strong>
-              {edit
-                ? "Update case"
-                : "New case"}
-            </strong>
+            <strong>{edit ? "Update case" : "New case"}</strong>
           </div>
 
-
           <div className="card-body">
+            {formError && <Banner>{formError}</Banner>}
 
-            {formError && (
-              <Banner>
-                {formError}
-              </Banner>
-            )}
+            <form className="form-grid" onSubmit={submit}>
+              {/* ==========================================
+                  CUSTOMER
+                  ========================================== */}
 
+              {!isCustomer && (
+                <Select
+                  id="case-customer"
+                  label="Customer"
+                  value={form.customer}
+                  onChange={(event) =>
+                    updateForm("customer", event.target.value)
+                  }
+                  required
+                >
+                  <option value="">Select a customer</option>
 
-            <form
-              className="form-grid"
-              onSubmit={submit}
-            >
+                  {customers.map((customer) => (
+                    <option key={customer._id} value={customer._id}>
+                      {customer.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
 
-              {/* Customer */}
-
-              <Select
-                id="case-customer"
-                label="Customer"
-                value={form.customer}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    customer:
-                      event.target.value,
-                  })
-                }
-                required
-              >
-                <option value="">
-                  Select a customer
-                </option>
-
-                {customers.map((customer) => (
-                  <option
-                    key={customer._id}
-                    value={customer._id}
-                  >
-                    {customer.name}
-                  </option>
-                ))}
-              </Select>
-
-
-              {/* Title */}
+              {/* ==========================================
+                  TITLE
+                  ========================================== */}
 
               <TextInput
                 id="case-title"
                 label="Title"
                 value={form.title}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    title:
-                      event.target.value,
-                  })
-                }
+                onChange={(event) => updateForm("title", event.target.value)}
                 placeholder="Enter case title"
                 required
               />
 
-
-              {/* Priority */}
+              {/* ==========================================
+                  PRIORITY
+                  ========================================== */}
 
               <Select
                 id="case-priority"
                 label="Priority"
                 value={form.priority}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    priority:
-                      event.target.value,
-                  })
-                }
+                onChange={(event) => updateForm("priority", event.target.value)}
               >
-                <option value="Low">
-                  Low
-                </option>
+                <option value="Low">Low</option>
 
-                <option value="Medium">
-                  Medium
-                </option>
+                <option value="Medium">Medium</option>
 
-                <option value="High">
-                  High
-                </option>
+                <option value="High">High</option>
 
-                <option value="Urgent">
-                  Urgent
-                </option>
+                <option value="Urgent">Urgent</option>
               </Select>
 
-
-              {/* Status */}
+              {/* ==========================================
+                  STATUS
+                  ========================================== */}
 
               <Select
                 id="case-status"
                 label="Status"
                 value={form.status}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    status:
-                      event.target.value,
-                  })
-                }
+                onChange={(event) => updateForm("status", event.target.value)}
               >
-                <option value="Open">
-                  Open
-                </option>
+                <option value="Open">Open</option>
 
-                <option value="In Progress">
-                  In Progress
-                </option>
+                <option value="In Progress">In Progress</option>
 
-                <option value="Resolved">
-                  Resolved
-                </option>
+                <option value="Resolved">Resolved</option>
 
-                <option value="Closed">
-                  Closed
-                </option>
+                <option value="Closed">Closed</option>
               </Select>
 
+              {/* ==========================================
+                  ASSIGNED AGENT
+                  ========================================== */}
 
-              {/* Description */}
+              {(isAdmin || isAgent) && (
+                <Select
+                  id="case-assignedTo"
+                  label="Assigned agent"
+                  value={form.assignedTo}
+                  onChange={(event) =>
+                    updateForm("assignedTo", event.target.value)
+                  }
+                >
+                  <option value="">Unassigned</option>
+
+                  {agents.map((agent) => (
+                    <option key={agent._id} value={agent._id}>
+                      {agent.name}
+                      {" — "}
+                      {agent.role}
+                    </option>
+                  ))}
+                </Select>
+              )}
+
+              {/* ==========================================
+                  DESCRIPTION
+                  ========================================== */}
 
               <div className="form-full">
-
                 <TextArea
                   id="case-description"
                   label="Description"
                   value={form.description}
                   onChange={(event) =>
-                    setForm({
-                      ...form,
-                      description:
-                        event.target.value,
-                    })
+                    updateForm("description", event.target.value)
                   }
                   placeholder="Describe the customer issue..."
                   required
                 />
-
               </div>
 
-
-              {/* Buttons */}
+              {/* ==========================================
+                  BUTTONS
+                  ========================================== */}
 
               <div className="form-actions form-full">
-
-                <Button
-                  type="submit"
-                  disabled={saving}
-                >
-                  {saving
-                    ? "Saving..."
-                    : edit
-                      ? "Save changes"
-                      : "Create case"}
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Saving..." : edit ? "Save changes" : "Create case"}
                 </Button>
-
 
                 <Button
                   type="button"
@@ -564,29 +582,23 @@ export default function Cases() {
                 >
                   Cancel
                 </Button>
-
               </div>
-
             </form>
-
           </div>
-
         </div>
       )}
 
-
-      {/* ===================================================
+      {/* ==================================================
           CASE LIST
-          =================================================== */}
+          ================================================== */}
 
       <section className="card">
-
-        {/* Toolbar */}
+        {/* =================================================
+            TOOLBAR
+            ================================================= */}
 
         <div className="toolbar">
-
           <div className="search-wrap">
-
             <Search size={17} />
 
             <input
@@ -594,247 +606,191 @@ export default function Cases() {
               aria-label="Search cases"
               placeholder="Search title, description, or customer"
               value={query}
-              onChange={(event) =>
-                setQuery(event.target.value)
-              }
+              onChange={(event) => setQuery(event.target.value)}
             />
-
           </div>
-
 
           <Select
             id="status-filter"
             label="Filter by status"
             value={status}
-            onChange={(event) =>
-              setStatus(event.target.value)
-            }
+            onChange={(event) => setStatus(event.target.value)}
           >
-            <option value="All">
-              All
-            </option>
+            <option value="All">All</option>
 
-            <option value="Open">
-              Open
-            </option>
+            <option value="Open">Open</option>
 
-            <option value="In Progress">
-              In Progress
-            </option>
+            <option value="In Progress">In Progress</option>
 
-            <option value="Resolved">
-              Resolved
-            </option>
+            <option value="Resolved">Resolved</option>
 
-            <option value="Closed">
-              Closed
-            </option>
+            <option value="Closed">Closed</option>
           </Select>
-
         </div>
 
+        {/* =================================================
+            LOADING
+            ================================================= */}
 
-        {/* Loading */}
+        {loading && <SkeletonRows />}
 
-        {loading && (
-          <SkeletonRows />
-        )}
-
-
-        {/* Error */}
+        {/* =================================================
+            ERROR
+            ================================================= */}
 
         {!loading && error && (
-          <ErrorState
-            message={error}
-            onRetry={load}
+          <ErrorState message={error} onRetry={loadCases} />
+        )}
+
+        {/* =================================================
+            EMPTY
+            ================================================= */}
+
+        {!loading && !error && filtered.length === 0 && (
+          <EmptyState
+            icon={FolderKanban}
+            title={
+              query || status !== "All" ? "No matching cases" : "No cases yet"
+            }
+            description={
+              query || status !== "All"
+                ? "Try changing your search or status filter."
+                : "Create a case to track customer support work."
+            }
+            action={
+              canCreate && (isCustomer || customers.length > 0) ? (
+                <Button onClick={openNewCase}>
+                  <Plus size={15} />
+                  New case
+                </Button>
+              ) : null
+            }
           />
         )}
 
+        {/* =================================================
+            TABLE
+            ================================================= */}
 
-        {/* Empty */}
+        {!loading && !error && filtered.length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Case</th>
 
-        {!loading &&
-          !error &&
-          filtered.length === 0 && (
-            <EmptyState
-              icon={FolderKanban}
-              title={
-                query ||
-                status !== "All"
-                  ? "No matching cases"
-                  : "No cases yet"
-              }
-              description={
-                query ||
-                status !== "All"
-                  ? "Try changing your search or status filter."
-                  : "Create a case to track customer support work."
-              }
-              action={
-                customers.length > 0 &&
-                canCreate ? (
-                  <Button
-                    onClick={openNewCase}
-                  >
-                    <Plus size={15} />
-                    New case
-                  </Button>
-                ) : null
-              }
-            />
-          )}
+                  <th>Customer</th>
 
+                  <th>Assigned to</th>
 
-        {/* Table */}
+                  <th>Priority</th>
 
-        {!loading &&
-          !error &&
-          filtered.length > 0 && (
+                  <th>Status</th>
 
-            <div className="table-wrap">
+                  <th>Created</th>
 
-              <table>
+                  <th>Actions</th>
+                </tr>
+              </thead>
 
-                <thead>
+              <tbody>
+                {filtered.map((item) => (
+                  <tr key={item._id}>
+                    {/* Case */}
 
-                  <tr>
-                    <th>Case</th>
-                    <th>Customer</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Created</th>
-                    <th>Actions</th>
+                    <td>
+                      <strong>{item.title}</strong>
+
+                      <div className="item-meta">{item.description}</div>
+                    </td>
+
+                    {/* Customer */}
+
+                    <td>{item.customer?.name || "Unknown"}</td>
+
+                    {/* Assigned */}
+
+                    <td>
+                      {item.assignedTo?.name ? (
+                        <>
+                          <strong>{item.assignedTo.name}</strong>
+
+                          <div className="item-meta">
+                            {item.assignedTo.role}
+                          </div>
+                        </>
+                      ) : (
+                        "Unassigned"
+                      )}
+                    </td>
+
+                    {/* Priority */}
+
+                    <td>
+                      <StatusBadge value={item.priority} />
+                    </td>
+
+                    {/* Status */}
+
+                    <td>
+                      <StatusBadge value={item.status} />
+                    </td>
+
+                    {/* Created */}
+
+                    <td>
+                      {item.createdAt
+                        ? new Date(item.createdAt).toLocaleDateString()
+                        : "—"}
+                    </td>
+
+                    {/* Actions */}
+
+                    <td>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 4,
+                        }}
+                      >
+                        {/* Edit */}
+
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label={`Edit ${item.title}`}
+                            onClick={() => editCase(item)}
+                          >
+                            <Pencil size={16} />
+                          </button>
+                        )}
+
+                        {/* Delete */}
+
+                        {canDelete && (
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            aria-label={`Delete ${item.title}`}
+                            onClick={() => setRemove(item)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
-
-                </thead>
-
-
-                <tbody>
-
-                  {filtered.map((item) => (
-
-                    <tr key={item._id}>
-
-                      {/* Case */}
-
-                      <td>
-
-                        <strong>
-                          {item.title}
-                        </strong>
-
-                        <div className="item-meta">
-                          {item.description}
-                        </div>
-
-                      </td>
-
-
-                      {/* Customer */}
-
-                      <td>
-                        {item.customer?.name ||
-                          "Unknown"}
-                      </td>
-
-
-                      {/* Priority */}
-
-                      <td>
-                        <StatusBadge
-                          value={item.priority}
-                        />
-                      </td>
-
-
-                      {/* Status */}
-
-                      <td>
-                        <StatusBadge
-                          value={item.status}
-                        />
-                      </td>
-
-
-                      {/* Created */}
-
-                      <td>
-                        {item.createdAt
-                          ? new Date(
-                              item.createdAt
-                            ).toLocaleDateString()
-                          : "—"}
-                      </td>
-
-
-                      {/* Actions */}
-
-                      <td>
-
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 4,
-                          }}
-                        >
-
-                          {/* Edit */}
-
-                          {canEdit && (
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              aria-label={`Edit ${item.title}`}
-                              onClick={() =>
-                                editCase(item)
-                              }
-                            >
-                              <Pencil
-                                size={16}
-                              />
-                            </button>
-                          )}
-
-
-                          {/* Delete */}
-
-                          {canDelete && (
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              aria-label={`Delete ${item.title}`}
-                              onClick={() =>
-                                setRemove(item)
-                              }
-                            >
-                              <Trash2
-                                size={16}
-                              />
-                            </button>
-                          )}
-
-                        </div>
-
-                      </td>
-
-                    </tr>
-
-                  ))}
-
-                </tbody>
-
-              </table>
-
-            </div>
-
-          )}
-
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
-
-      {/* ===================================================
+      {/* ==================================================
           DELETE CONFIRMATION
-          =================================================== */}
+          ================================================== */}
 
       <ConfirmDialog
         open={Boolean(remove)}
@@ -846,12 +802,9 @@ export default function Cases() {
         }
         confirmLabel="Delete"
         danger
-        onCancel={() =>
-          setRemove(null)
-        }
+        onCancel={() => setRemove(null)}
         onConfirm={confirmDelete}
       />
-
     </div>
   );
 }
