@@ -1,0 +1,336 @@
+/* =========================================================
+   APP SHELL
+   ========================================================= */
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+}
+
+
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+
+  display: flex;
+  flex-direction: column;
+
+  background: #fff;
+  border-right: 1px solid var(--border);
+}
+
+
+/* =========================================================
+   SIDEBAR BRAND
+   ========================================================= */
+
+.sidebar-brand {
+  height: 78px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+  padding: 0 20px;
+
+  border-bottom: 1px solid var(--border);
+}
+
+.brand-name {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.brand-caption {
+  margin-top: 1px;
+
+  color: var(--muted);
+  font-size: 11px;
+}
+
+
+/* =========================================================
+   SIDEBAR NAVIGATION
+   ========================================================= */
+
+.sidebar-nav {
+  flex: 1;
+  padding: 24px 14px;
+
+  overflow-y: auto;
+}
+
+.nav-section-title {
+  padding: 0 10px 9px;
+
+  color: var(--subtle);
+
+  font-size: 10px;
+  font-weight: 700;
+
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.nav-list {
+  display: grid;
+  gap: 5px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+
+  gap: 11px;
+
+  min-height: 43px;
+  padding: 0 11px;
+
+  border-radius: 10px;
+
+  color: var(--dark);
+
+  font-weight: 600;
+  font-size: 13px;
+
+  text-decoration: none;
+
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.nav-link:hover {
+  color: var(--primary-active);
+  background: var(--primary-light);
+}
+
+.nav-link:focus-visible {
+  outline: 3px solid var(--secondary);
+  outline-offset: 2px;
+}
+
+.nav-link.active {
+  color: #fff;
+  background: var(--primary);
+
+  box-shadow:
+    0 4px 12px rgba(48, 175, 255, 0.2);
+}
+
+
+/* =========================================================
+   SIDEBAR FOOTER
+   ========================================================= */
+
+.sidebar-footer {
+  padding: 16px;
+
+  border-top: 1px solid var(--border);
+}
+
+.user-summary {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 11px;
+
+  border-radius: 12px;
+
+  background: var(--background);
+}
+
+.role-pill {
+  display: inline-block;
+
+  margin-top: 4px;
+  padding: 2px 7px;
+
+  border-radius: 999px;
+
+  background: var(--secondary);
+  color: var(--dark);
+
+  font-size: 10px;
+  font-weight: 700;
+
+  text-transform: capitalize;
+}
+
+.logout-btn {
+  width: 100%;
+
+  justify-content: flex-start;
+
+  margin-top: 8px;
+}
+
+
+/* =========================================================
+   MOBILE HEADER
+   ========================================================= */
+
+.mobile-header {
+  height: 62px;
+
+  position: sticky;
+  top: 0;
+  z-index: 30;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 16px;
+
+  background: rgba(255, 255, 255, 0.96);
+
+  border-bottom: 1px solid var(--border);
+
+  backdrop-filter: blur(8px);
+}
+
+.mobile-brand {
+  display: flex;
+  align-items: center;
+
+  gap: 9px;
+}
+
+
+/* =========================================================
+   MOBILE NAVIGATION
+   ========================================================= */
+
+.mobile-nav {
+  padding: 14px;
+
+  background: #fff;
+
+  border-bottom: 1px solid var(--border);
+
+  box-shadow: var(--shadow-md);
+}
+
+.mobile-nav .nav-list {
+  gap: 4px;
+}
+
+.mobile-user {
+  margin-top: 14px;
+  padding-top: 14px;
+
+  border-top: 1px solid var(--border);
+}
+
+
+/* =========================================================
+   SKIP LINK
+   ========================================================= */
+
+.skip-link {
+  position: fixed;
+
+  left: 12px;
+  top: 12px;
+
+  z-index: 200;
+
+  padding: 9px 12px;
+
+  border-radius: 8px;
+
+  background: #fff;
+  color: var(--dark);
+
+  box-shadow: var(--shadow-lg);
+
+  transform: translateY(-150%);
+
+  transition: transform 0.15s ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .sidebar-brand {
+    padding: 0 16px;
+  }
+
+  .sidebar-nav {
+    padding: 20px 10px;
+  }
+
+  .sidebar-footer {
+    padding: 12px;
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  .app-shell {
+    display: block;
+    min-height: 100vh;
+  }
+
+  /*
+   * Desktop sidebar is hidden on mobile.
+   * Mobile navigation should be rendered by AppShell.jsx.
+   */
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobile-header {
+    display: flex;
+  }
+
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 480px) {
+
+  .mobile-header {
+    height: 58px;
+    padding: 0 12px;
+  }
+
+  .mobile-nav {
+    padding: 12px;
+  }
+
+  .nav-link {
+    min-height: 42px;
+  }
+
+}

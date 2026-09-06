@@ -1,8 +1,9 @@
 import express from "express";
 import authMiddleware from "../middleware/authMiddleware.js";
-
+import authorize from "../middleware/authorize.js";
 import {
   getCustomers,
+  getCustomer,
   addCustomer,
   updateCustomer,
   deleteCustomer,
@@ -10,10 +11,12 @@ import {
 
 const router = express.Router();
 
-// All customer routes require JWT authentication
-router.get("/", authMiddleware, getCustomers);
-router.post("/", authMiddleware, addCustomer);
-router.patch("/:id", authMiddleware, updateCustomer);
-router.delete("/:id", authMiddleware, deleteCustomer);
+router.use(authMiddleware);
+
+router.get("/", getCustomers);
+router.get("/:id", getCustomer);
+router.post("/", authorize("admin", "agent"), addCustomer);
+router.patch("/:id", authorize("admin", "agent"), updateCustomer);
+router.delete("/:id", authorize("admin"), deleteCustomer);
 
 export default router;

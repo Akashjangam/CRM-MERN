@@ -1,300 +1,750 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pencil, Plus, Search, Trash2, Users } from "lucide-react";
-import { Button } from "../components/ui/Button";
-import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import {
-  EmptyState,
-  ErrorState,
-  FormBanner,
-  SkeletonRows,
-} from "../components/ui/Feedback";
-import { TextInput } from "../components/ui/Field";
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Users,
+} from "lucide-react";
+
 import api, { getErrorMessage } from "../services/api";
 
-const emptyForm = {
+import { Button } from "../components/ui/Button";
+import { TextInput } from "../components/ui/Field";
+
+import {
+  Banner,
+  EmptyState,
+  ErrorState,
+  SkeletonRows,
+} from "../components/ui/Feedback";
+
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
+
+import { useAuth } from "../context/AuthContext";
+
+
+/* =========================================================
+   INITIAL FORM
+   ========================================================= */
+
+const initialForm = {
   name: "",
   email: "",
   phone: "",
   company: "",
 };
 
-function Customers() {
-  const [customers, setCustomers] = useState([]);
-  const [formData, setFormData] = useState(emptyForm);
-  const [editingId, setEditingId] = useState(null);
+
+/* =========================================================
+   CUSTOMERS PAGE
+   ========================================================= */
+
+export default function Customers() {
+  const { user } = useAuth();
+
+  /* =======================================================
+     STATE
+     ======================================================= */
+
+  const [items, setItems] = useState([]);
+
+  const [form, setForm] = useState(initialForm);
+
+  const [edit, setEdit] = useState(null);
+
   const [query, setQuery] = useState("");
+
   const [loading, setLoading] = useState(true);
+
   const [error, setError] = useState("");
+
   const [formError, setFormError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [formOpen, setFormOpen] = useState(false);
+
+  const [saving, setSaving] = useState(false);
+
+  const [remove, setRemove] = useState(null);
+
+  const [open, setOpen] = useState(false);
+
+
+  /* =======================================================
+     ROLE PERMISSIONS
+     ======================================================= */
+
+  const role = user?.role || "";
+
+  const canCreate =
+    ["admin", "agent"].includes(role);
+
+  const canEdit =
+    ["admin", "agent"].includes(role);
+
+  const canDelete =
+    role === "admin";
+
+
+  /* =======================================================
+     LOAD CUSTOMERS
+     ======================================================= */
 
   const load = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const response = await api.get("/customers");
-      setCustomers(response.data.data || []);
-    } catch (err) {
-      setError(getErrorMessage(err, "Could not load customers."));
+      const response =
+        await api.get("/customers");
+
+      setItems(
+        response.data?.data || []
+      );
+    } catch (error) {
+      setError(
+        getErrorMessage(
+          error,
+          "Could not load customers."
+        )
+      );
     } finally {
       setLoading(false);
     }
   };
 
+
+  /* =======================================================
+     INITIAL LOAD
+     ======================================================= */
+
   useEffect(() => {
     load();
   }, []);
 
+
+  /* =======================================================
+     FILTER CUSTOMERS
+     ======================================================= */
+
   const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return customers;
-    return customers.filter((customer) =>
-      [customer.name, customer.email, customer.phone, customer.company]
+    const search =
+      query.trim().toLowerCase();
+
+    if (!search) {
+      return items;
+    }
+
+    return items.filter((customer) => {
+      const searchableText = [
+        customer.name,
+        customer.email,
+        customer.phone,
+        customer.company,
+      ]
         .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(term))
-    );
-  }, [customers, query]);
+        .join(" ")
+        .toLowerCase();
 
-  const handleChange = (event) => {
-    setFormData((current) => ({
-      ...current,
-      [event.target.name]: event.target.value,
-    }));
-  };
+      return searchableText.includes(search);
+    });
+  }, [items, query]);
 
-  const resetForm = () => {
-    setFormData(emptyForm);
-    setEditingId(null);
+
+  /* =======================================================
+     OPEN NEW CUSTOMER FORM
+     ======================================================= */
+
+  const openNewCustomer = () => {
+    setEdit(null);
+
+    setForm({
+      ...initialForm,
+    });
+
     setFormError("");
-    setFormOpen(false);
+    setOpen(true);
   };
 
-  const startCreate = () => {
-    setFormData(emptyForm);
-    setEditingId(null);
-    setFormError("");
-    setFormOpen(true);
-  };
 
-  const startEdit = (customer) => {
-    setEditingId(customer._id);
-    setFormData({
+  /* =======================================================
+     OPEN EDIT FORM
+     ======================================================= */
+
+  const editCustomer = (customer) => {
+    setEdit(customer._id);
+
+    setForm({
       name: customer.name || "",
       email: customer.email || "",
       phone: customer.phone || "",
       company: customer.company || "",
     });
+
     setFormError("");
-    setFormOpen(true);
+    setOpen(true);
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+
+  /* =======================================================
+     CLOSE FORM
+     ======================================================= */
+
+  const closeForm = () => {
+    if (saving) {
+      return;
+    }
+
+    setOpen(false);
+    setEdit(null);
+    setForm(initialForm);
     setFormError("");
-    setSubmitting(true);
+  };
+
+
+  /* =======================================================
+     UPDATE FORM
+     ======================================================= */
+
+  const updateField = (field, value) => {
+    setForm((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+  };
+
+
+  /* =======================================================
+     SUBMIT
+     ======================================================= */
+
+  const submit = async (event) => {
+    event.preventDefault();
+
+    setFormError("");
+
+    const name =
+      form.name.trim();
+
+    const email =
+      form.email.trim();
+
+    const phone =
+      form.phone.trim();
+
+    const company =
+      form.company.trim();
+
+    if (!name) {
+      setFormError(
+        "Full name is required."
+      );
+      return;
+    }
+
+    if (!email) {
+      setFormError(
+        "Email address is required."
+      );
+      return;
+    }
+
+    if (!phone) {
+      setFormError(
+        "Phone number is required."
+      );
+      return;
+    }
+
+    setSaving(true);
 
     try {
-      if (editingId) {
-        await api.patch(`/customers/${editingId}`, formData);
+      const payload = {
+        name,
+        email,
+        phone,
+        company,
+      };
+
+      if (edit) {
+        await api.patch(
+          `/customers/${edit}`,
+          payload
+        );
       } else {
-        await api.post("/customers", formData);
+        await api.post(
+          "/customers",
+          payload
+        );
       }
-      resetForm();
+
+      setOpen(false);
+      setEdit(null);
+      setForm(initialForm);
+
       await load();
-    } catch (err) {
-      setFormError(getErrorMessage(err, "Could not save the customer."));
+    } catch (error) {
+      setFormError(
+        getErrorMessage(
+          error,
+          "Could not save customer."
+        )
+      );
     } finally {
-      setSubmitting(false);
+      setSaving(false);
     }
   };
+
+
+  /* =======================================================
+     DELETE
+     ======================================================= */
 
   const confirmDelete = async () => {
-    if (!pendingDelete) return;
+    if (!remove?._id) {
+      return;
+    }
 
     try {
-      await api.delete(`/customers/${pendingDelete._id}`);
-      setPendingDelete(null);
+      await api.delete(
+        `/customers/${remove._id}`
+      );
+
+      setRemove(null);
+
       await load();
-    } catch (err) {
-      setPendingDelete(null);
-      setError(getErrorMessage(err, "Could not delete the customer."));
+    } catch (error) {
+      setError(
+        getErrorMessage(
+          error,
+          "Could not delete customer."
+        )
+      );
+
+      setRemove(null);
     }
   };
 
+
+  /* =======================================================
+     RENDER
+     ======================================================= */
+
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="page">
+
+      {/* ===================================================
+          HEADER
+          =================================================== */}
+
+      <header className="page-header">
+
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Customers</h1>
-          <p className="mt-1 text-sm text-muted">
-            Directory of people and companies you work with.
+          <h1 className="page-title">
+            Customers
+          </h1>
+
+          <p className="page-subtitle">
+            Manage people and companies, contact
+            details, and customer records.
           </p>
         </div>
-        <Button onClick={startCreate}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Add customer
-        </Button>
+
+
+        {canCreate && (
+          <Button
+            onClick={openNewCustomer}
+          >
+            <Plus size={17} />
+            Add customer
+          </Button>
+        )}
+
       </header>
 
-      {formOpen ? (
-        <section className="rounded-md border border-line bg-surface p-4 sm:p-5">
-          <h2 className="text-sm font-semibold">
-            {editingId ? "Update customer" : "New customer"}
-          </h2>
-          <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <FormBanner>{formError}</FormBanner>
-            </div>
-            <TextInput
-              id="customer-name"
-              name="name"
-              label="Name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-            />
-            <TextInput
-              id="customer-email"
-              name="email"
-              type="email"
-              label="Email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-            />
-            <TextInput
-              id="customer-phone"
-              name="phone"
-              type="tel"
-              label="Phone"
-              value={formData.phone}
-              onChange={handleChange}
-              required
-            />
-            <TextInput
-              id="customer-company"
-              name="company"
-              label="Company"
-              value={formData.company}
-              onChange={handleChange}
-            />
-            <div className="flex gap-2 md:col-span-2">
-              <Button type="submit" disabled={submitting}>
-                {submitting
-                  ? "Saving…"
-                  : editingId
-                    ? "Save changes"
-                    : "Add customer"}
-              </Button>
-              <Button type="button" variant="secondary" onClick={resetForm}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </section>
-      ) : null}
 
-      <section className="rounded-md border border-line bg-surface">
-        <div className="flex items-center gap-2 border-b border-line p-3">
-          <Search className="h-4 w-4 text-muted" aria-hidden="true" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search name, email, phone, or company"
-            aria-label="Search customers"
-            className="w-full bg-transparent text-sm outline-none placeholder:text-muted"
-          />
+      {/* ===================================================
+          FORM
+          =================================================== */}
+
+      {open && (
+        <div
+          className="card"
+          style={{ marginBottom: 18 }}
+        >
+
+          <div className="card-header">
+
+            <strong>
+              {edit
+                ? "Update customer"
+                : "New customer"}
+            </strong>
+
+          </div>
+
+
+          <div className="card-body">
+
+            {formError && (
+              <Banner>
+                {formError}
+              </Banner>
+            )}
+
+
+            <form
+              className="form-grid"
+              onSubmit={submit}
+            >
+
+              {/* Name */}
+
+              <TextInput
+                id="customer-name"
+                label="Full name"
+                value={form.name}
+                onChange={(event) =>
+                  updateField(
+                    "name",
+                    event.target.value
+                  )
+                }
+                placeholder="Enter full name"
+                required
+              />
+
+
+              {/* Email */}
+
+              <TextInput
+                id="customer-email"
+                label="Email address"
+                type="email"
+                value={form.email}
+                onChange={(event) =>
+                  updateField(
+                    "email",
+                    event.target.value
+                  )
+                }
+                placeholder="customer@example.com"
+                required
+              />
+
+
+              {/* Phone */}
+
+              <TextInput
+                id="customer-phone"
+                label="Phone"
+                type="tel"
+                value={form.phone}
+                onChange={(event) =>
+                  updateField(
+                    "phone",
+                    event.target.value
+                  )
+                }
+                placeholder="+91 XXXXX XXXXX"
+                required
+              />
+
+
+              {/* Company */}
+
+              <TextInput
+                id="customer-company"
+                label="Company"
+                value={form.company}
+                onChange={(event) =>
+                  updateField(
+                    "company",
+                    event.target.value
+                  )
+                }
+                placeholder="Company name"
+              />
+
+
+              {/* Actions */}
+
+              <div className="form-actions form-full">
+
+                <Button
+                  type="submit"
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Saving..."
+                    : edit
+                      ? "Save changes"
+                      : "Add customer"}
+                </Button>
+
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={closeForm}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+
+              </div>
+
+            </form>
+
+          </div>
+
+        </div>
+      )}
+
+
+      {/* ===================================================
+          CUSTOMER LIST
+          =================================================== */}
+
+      <section className="card">
+
+        {/* Toolbar */}
+
+        <div className="toolbar">
+
+          <div className="search-wrap">
+
+            <Search size={17} />
+
+            <input
+              className="search-input"
+              aria-label="Search customers"
+              placeholder="Search name, email, phone, or company"
+              value={query}
+              onChange={(event) =>
+                setQuery(event.target.value)
+              }
+            />
+
+          </div>
+
         </div>
 
-        {loading ? (
-          <div className="p-4">
-            <SkeletonRows />
-          </div>
-        ) : error ? (
-          <div className="p-4">
-            <ErrorState message={error} onRetry={load} />
-          </div>
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title={query ? "No matching customers" : "No customers yet"}
-            description={
-              query
-                ? "Try a different search term."
-                : "Add a customer to keep contact details in one place."
-            }
-            action={query ? undefined : { label: "Add customer", onClick: startCreate }}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-left text-sm">
-              <thead className="border-b border-line bg-canvas text-muted">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Name</th>
-                  <th className="px-4 py-2 font-medium">Email</th>
-                  <th className="px-4 py-2 font-medium">Phone</th>
-                  <th className="px-4 py-2 font-medium">Company</th>
-                  <th className="px-4 py-2 font-medium">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {filtered.map((customer) => (
-                  <tr key={customer._id} className="bg-surface">
-                    <td className="px-4 py-3 font-medium">{customer.name}</td>
-                    <td className="px-4 py-3 text-muted">{customer.email}</td>
-                    <td className="px-4 py-3 text-muted">{customer.phone}</td>
-                    <td className="px-4 py-3 text-muted">
-                      {customer.company || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`Edit ${customer.name}`}
-                          onClick={() => startEdit(customer)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label={`Delete ${customer.name}`}
-                          onClick={() => setPendingDelete(customer)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+
+        {/* Loading */}
+
+        {loading && (
+          <SkeletonRows />
         )}
+
+
+        {/* Error */}
+
+        {!loading && error && (
+          <ErrorState
+            message={error}
+            onRetry={load}
+          />
+        )}
+
+
+        {/* Empty */}
+
+        {!loading &&
+          !error &&
+          filtered.length === 0 && (
+            <EmptyState
+              icon={Users}
+              title={
+                query
+                  ? "No matching customers"
+                  : "No customers yet"
+              }
+              description={
+                query
+                  ? "Try a different search term."
+                  : "Add a customer to keep contact details in one place."
+              }
+              action={
+                !query &&
+                canCreate ? (
+                  <Button
+                    onClick={
+                      openNewCustomer
+                    }
+                  >
+                    <Plus size={15} />
+                    Add customer
+                  </Button>
+                ) : null
+              }
+            />
+          )}
+
+
+        {/* Table */}
+
+        {!loading &&
+          !error &&
+          filtered.length > 0 && (
+
+            <div className="table-wrap">
+
+              <table>
+
+                <thead>
+
+                  <tr>
+                    <th>Customer</th>
+                    <th>Contact</th>
+                    <th>Company</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                  {filtered.map(
+                    (customer) => (
+
+                      <tr
+                        key={customer._id}
+                      >
+
+                        {/* Customer */}
+
+                        <td>
+                          <strong>
+                            {customer.name}
+                          </strong>
+                        </td>
+
+
+                        {/* Contact */}
+
+                        <td>
+
+                          <div>
+                            {customer.email}
+                          </div>
+
+                          <div className="item-meta">
+                            {customer.phone}
+                          </div>
+
+                        </td>
+
+
+                        {/* Company */}
+
+                        <td>
+                          {customer.company ||
+                            "—"}
+                        </td>
+
+
+                        {/* Created */}
+
+                        <td>
+                          {customer.createdAt
+                            ? new Date(
+                                customer.createdAt
+                              ).toLocaleDateString()
+                            : "—"}
+                        </td>
+
+
+                        {/* Actions */}
+
+                        <td>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 4,
+                            }}
+                          >
+
+                            {/* Edit */}
+
+                            {canEdit && (
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                aria-label={`Edit ${customer.name}`}
+                                onClick={() =>
+                                  editCustomer(
+                                    customer
+                                  )
+                                }
+                              >
+                                <Pencil
+                                  size={16}
+                                />
+                              </button>
+                            )}
+
+
+                            {/* Delete */}
+
+                            {canDelete && (
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                aria-label={`Delete ${customer.name}`}
+                                onClick={() =>
+                                  setRemove(
+                                    customer
+                                  )
+                                }
+                              >
+                                <Trash2
+                                  size={16}
+                                />
+                              </button>
+                            )}
+
+                          </div>
+
+                        </td>
+
+                      </tr>
+
+                    )
+                  )}
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          )}
+
       </section>
 
+
+      {/* ===================================================
+          DELETE CONFIRMATION
+          =================================================== */}
+
       <ConfirmDialog
-        open={Boolean(pendingDelete)}
+        open={Boolean(remove)}
         title="Delete customer"
         message={
-          pendingDelete
-            ? `Remove ${pendingDelete.name} from the directory? This cannot be undone.`
+          remove
+            ? `Delete “${remove.name}”? This action cannot be undone.`
             : ""
         }
         confirmLabel="Delete"
         danger
-        onCancel={() => setPendingDelete(null)}
+        onCancel={() =>
+          setRemove(null)
+        }
         onConfirm={confirmDelete}
       />
+
     </div>
   );
 }
-
-export default Customers;

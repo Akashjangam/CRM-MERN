@@ -3,10 +3,10 @@ import api from "../services/api";
 
 const AuthContext = createContext(null);
 
-function readStoredUser() {
+function readUser() {
   try {
-    const raw = localStorage.getItem("user");
-    return raw ? JSON.parse(raw) : null;
+    const value = localStorage.getItem("user");
+    return value ? JSON.parse(value) : null;
   } catch {
     return null;
   }
@@ -14,60 +14,47 @@ function readStoredUser() {
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem("token"));
-  const [user, setUser] = useState(readStoredUser);
+  const [user, setUser] = useState(readUser);
 
   const persist = useCallback((nextToken, nextUser) => {
-    if (nextToken) {
-      localStorage.setItem("token", nextToken);
-    } else {
-      localStorage.removeItem("token");
-    }
+    if (nextToken) localStorage.setItem("token", nextToken);
+    else localStorage.removeItem("token");
 
-    if (nextUser) {
-      localStorage.setItem("user", JSON.stringify(nextUser));
-    } else {
-      localStorage.removeItem("user");
-    }
+    if (nextUser) localStorage.setItem("user", JSON.stringify(nextUser));
+    else localStorage.removeItem("user");
 
     setToken(nextToken);
     setUser(nextUser);
   }, []);
 
   const login = useCallback(async (credentials) => {
-    const response = await api.post("/auth/login", credentials);
-    persist(response.data.token, response.data.user);
-    return response.data;
+    const { data } = await api.post("/auth/login", credentials);
+    persist(data.token, data.user);
+    return data;
   }, [persist]);
 
   const register = useCallback(async (payload) => {
-    const response = await api.post("/auth/register", payload);
-    return response.data;
-  }, []);
-
-  const logout = useCallback(() => {
-    persist(null, null);
+    const { data } = await api.post("/auth/register", payload);
+    if (data.token && data.user) persist(data.token, data.user);
+    return data;
   }, [persist]);
 
-  const value = useMemo(
-    () => ({
-      token,
-      user,
-      isAuthenticated: Boolean(token),
-      login,
-      register,
-      logout,
-    }),
-    [token, user, login, register, logout]
-  );
+  const logout = useCallback(() => persist(null, null), [persist]);
+
+  const value = useMemo(() => ({
+    token,
+    user,
+    isAuthenticated: Boolean(token),
+    login,
+    register,
+    logout,
+  }), [token, user, login, register, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return context;
+  const value = useContext(AuthContext);
+  if (!value) throw new Error("useAuth must be used within AuthProvider");
+  return value;
 }
-

@@ -1,139 +1,557 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  FolderKanban,
+  Users,
+  AlertCircle,
+  ArrowRight,
+  Plus,
+} from "lucide-react";
 import { Link } from "react-router-dom";
-import { FolderKanban, Users } from "lucide-react";
-import { ErrorState, SkeletonRows } from "../components/ui/Feedback";
-import { StatusBadge } from "../components/ui/StatusBadge";
-import { useAuth } from "../context/AuthContext";
+
 import api, { getErrorMessage } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 
-function StatCard({ label, value, href }) {
-  return (
-    <Link
-      to={href}
-      className="block rounded-md border border-line bg-surface p-4 hover:border-accent"
-    >
-      <p className="text-sm text-muted">{label}</p>
-      <p className="mt-2 text-3xl font-semibold tabular-nums text-ink">{value}</p>
-    </Link>
-  );
-}
+import { StatusBadge } from "../components/ui/StatusBadge";
+import {
+  ErrorState,
+  SkeletonRows,
+} from "../components/ui/Feedback";
+import { Button } from "../components/ui/Button";
 
-function Dashboard() {
+
+export default function Dashboard() {
   const { user } = useAuth();
+
   const [customers, setCustomers] = useState([]);
   const [cases, setCases] = useState([]);
+  const [activities, setActivities] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+
+  /* ======================================================
+     ROLE
+     ====================================================== */
+
+  const role = user?.role || "";
+
+  const canCreateCase =
+    ["admin", "agent", "customer"].includes(role);
+
+  const canCreateCustomer =
+    ["admin", "agent"].includes(role);
+
+
+  /* ======================================================
+     LOAD DASHBOARD
+     ====================================================== */
 
   const load = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const [customerRes, caseRes] = await Promise.all([
-        api.get("/customers"),
-        api.get("/cases"),
-      ]);
-      setCustomers(customerRes.data.data || []);
-      setCases(caseRes.data.data || []);
+      const [customersResponse, casesResponse, activitiesResponse] =
+        await Promise.all([
+          api.get("/customers"),
+          api.get("/cases"),
+
+          // Activities are optional for dashboard
+          api
+            .get("/activities")
+            .catch(() => ({
+              data: {
+                data: [],
+              },
+            })),
+        ]);
+
+      setCustomers(
+        customersResponse.data?.data || []
+      );
+
+      setCases(
+        casesResponse.data?.data || []
+      );
+
+      setActivities(
+        activitiesResponse.data?.data || []
+      );
     } catch (err) {
-      setError(getErrorMessage(err, "Could not load dashboard data."));
+      setError(
+        getErrorMessage(
+          err,
+          "Could not load dashboard data."
+        )
+      );
     } finally {
       setLoading(false);
     }
   };
 
+
+  /* ======================================================
+     INITIAL LOAD
+     ====================================================== */
+
   useEffect(() => {
     load();
   }, []);
 
-  const openCases = cases.filter((item) => item.status !== "Closed");
-  const recentCases = [...cases]
-    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
-    .slice(0, 5);
+
+  /* ======================================================
+     OPEN CASES
+     ====================================================== */
+
+  const openCases = useMemo(() => {
+    return cases.filter(
+      (item) =>
+        !["Closed", "Resolved"].includes(
+          item.status
+        )
+    );
+  }, [cases]);
+
+
+  /* ======================================================
+     PRIORITY CASES
+     ====================================================== */
+
+  const priorityCases = useMemo(() => {
+    return cases.filter(
+      (item) =>
+        ["Urgent", "High"].includes(
+          item.priority
+        )
+    );
+  }, [cases]);
+
+
+  /* ======================================================
+     RECENT CASES
+     ====================================================== */
+
+  const recentCases = useMemo(() => {
+    return [...cases]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt || 0) -
+          new Date(a.createdAt || 0)
+      )
+      .slice(0, 6);
+  }, [cases]);
+
+
+  /* ======================================================
+     RECENT CUSTOMERS
+     ====================================================== */
+
+  const recentCustomers = useMemo(() => {
+    return [...customers]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt || 0) -
+          new Date(a.createdAt || 0)
+      )
+      .slice(0, 6);
+  }, [customers]);
+
+
+  /* ======================================================
+     FIRST NAME
+     ====================================================== */
+
+  const firstName = user?.name
+    ? user.name.split(" ")[0]
+    : "";
+
+
+  /* ======================================================
+     RENDER
+     ====================================================== */
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
-        <p className="mt-1 text-sm text-muted">
-          {user?.name ? `Welcome back, ${user.name}.` : "A snapshot of customers and open work."}
-        </p>
+    <div className="page">
+
+      {/* ==================================================
+          HEADER
+          ================================================== */}
+
+      <header className="page-header">
+
+        <div>
+          <h1 className="page-title">
+            Good to see you
+            {firstName
+              ? `, ${firstName}`
+              : ""}
+            .
+          </h1>
+
+          <p className="page-subtitle">
+            Here’s a clear view of your customer
+            relationships and support workload.
+          </p>
+        </div>
+
+
+        <div className="actions">
+
+          <Link
+            className="btn btn-primary"
+            to="/cases"
+          >
+            Manage cases
+            <ArrowRight size={16} />
+          </Link>
+
+        </div>
+
       </header>
 
-      {loading ? (
-        <SkeletonRows count={4} />
-      ) : error ? (
-        <ErrorState message={error} onRetry={load} />
-      ) : (
+
+      {/* ==================================================
+          LOADING
+          ================================================== */}
+
+      {loading && (
+        <SkeletonRows count={5} />
+      )}
+
+
+      {/* ==================================================
+          ERROR
+          ================================================== */}
+
+      {!loading && error && (
+        <ErrorState
+          message={error}
+          onRetry={load}
+        />
+      )}
+
+
+      {/* ==================================================
+          DASHBOARD
+          ================================================== */}
+
+      {!loading && !error && (
         <>
-          <section aria-label="Summary" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <StatCard label="Customers" value={customers.length} href="/customers" />
-            <StatCard label="Open cases" value={openCases.length} href="/cases" />
-            <StatCard label="All cases" value={cases.length} href="/cases" />
+
+          {/* ==============================================
+              STATISTICS
+              ============================================== */}
+
+          <section
+            className="stats"
+            aria-label="CRM summary"
+          >
+
+            <Stat
+              label="Customers"
+              value={customers.length}
+              icon={Users}
+              href="/customers"
+            />
+
+            <Stat
+              label="Open cases"
+              value={openCases.length}
+              icon={FolderKanban}
+              href="/cases"
+            />
+
+            <Stat
+              label="Priority cases"
+              value={priorityCases.length}
+              icon={AlertCircle}
+              href="/cases"
+            />
+
+            <Stat
+              label="Activities"
+              value={activities.length}
+              icon={Activity}
+              href="/activities"
+            />
+
           </section>
 
-          <section className="rounded-md border border-line bg-surface">
-            <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <h2 className="text-sm font-semibold">Recent cases</h2>
-              <Link to="/cases" className="text-sm font-medium text-accent hover:underline">
-                View all
-              </Link>
-            </div>
 
-            {recentCases.length === 0 ? (
-              <div className="px-4 py-10 text-center">
-                <FolderKanban className="mx-auto h-8 w-8 text-muted" aria-hidden="true" />
-                <p className="mt-2 text-sm text-muted">No cases yet. Open one from the Cases page.</p>
+          {/* ==============================================
+              DASHBOARD GRID
+              ============================================== */}
+
+          <div className="dashboard-grid">
+
+            {/* ============================================
+                RECENT CASES
+                ============================================ */}
+
+            <section className="card">
+
+              <div
+                className="card-header"
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+
+                <div>
+                  <strong>
+                    Recent cases
+                  </strong>
+
+                  <div className="item-meta">
+                    Latest support work
+                  </div>
+                </div>
+
+
+                <Link to="/cases">
+                  View all
+                </Link>
+
               </div>
-            ) : (
-              <ul role="list" className="divide-y divide-line">
-                {recentCases.map((item) => (
-                  <li key={item._id} className="flex flex-wrap items-center gap-2 px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{item.title}</p>
-                      <p className="truncate text-xs text-muted">
-                        {item.customer?.name || "Unknown customer"}
-                      </p>
-                    </div>
-                    <StatusBadge value={item.priority} />
-                    <StatusBadge value={item.status} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
 
-          <section className="rounded-md border border-line bg-surface">
-            <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <h2 className="text-sm font-semibold">Customers</h2>
-              <Link to="/customers" className="text-sm font-medium text-accent hover:underline">
-                Manage
-              </Link>
-            </div>
 
-            {customers.length === 0 ? (
-              <div className="px-4 py-10 text-center">
-                <Users className="mx-auto h-8 w-8 text-muted" aria-hidden="true" />
-                <p className="mt-2 text-sm text-muted">Add a customer to start tracking work.</p>
+              {recentCases.length === 0 ? (
+
+                <div className="empty">
+
+                  <FolderKanban
+                    size={30}
+                  />
+
+                  <p>
+                    No cases yet.
+                  </p>
+
+                  {canCreateCase && (
+                    <Link
+                      className="btn btn-secondary btn-small"
+                      to="/cases"
+                    >
+                      <Plus size={15} />
+                      Create a case
+                    </Link>
+                  )}
+
+                </div>
+
+              ) : (
+
+                <ul className="list">
+
+                  {recentCases.map(
+                    (item) => (
+
+                      <li
+                        className="list-item"
+                        key={item._id}
+                      >
+
+                        <div className="avatar">
+                          <FolderKanban
+                            size={17}
+                          />
+                        </div>
+
+
+                        <div className="item-main">
+
+                          <div className="item-title">
+                            {item.title}
+                          </div>
+
+                          <div className="item-meta">
+                            {item.customer?.name ||
+                              "Unknown customer"}
+                          </div>
+
+                        </div>
+
+
+                        <StatusBadge
+                          value={
+                            item.priority
+                          }
+                        />
+
+                        <StatusBadge
+                          value={
+                            item.status
+                          }
+                        />
+
+                      </li>
+
+                    )
+                  )}
+
+                </ul>
+
+              )}
+
+            </section>
+
+
+            {/* ============================================
+                CUSTOMERS
+                ============================================ */}
+
+            <section className="card">
+
+              <div
+                className="card-header"
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+
+                <div>
+
+                  <strong>
+                    Customers
+                  </strong>
+
+                  <div className="item-meta">
+                    Recent records
+                  </div>
+
+                </div>
+
+
+                <Link to="/customers">
+                  View all
+                </Link>
+
               </div>
-            ) : (
-              <ul role="list" className="divide-y divide-line">
-                {customers.slice(0, 6).map((customer) => (
-                  <li key={customer._id} className="px-4 py-3">
-                    <p className="text-sm font-medium">{customer.name}</p>
-                    <p className="text-xs text-muted">
-                      {[customer.company, customer.email].filter(Boolean).join(" · ")}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+
+
+              {recentCustomers.length === 0 ? (
+
+                <div className="empty">
+
+                  <Users size={30} />
+
+                  <p>
+                    Add a customer to get started.
+                  </p>
+
+                  {canCreateCustomer && (
+                    <Link
+                      className="btn btn-secondary btn-small"
+                      to="/customers"
+                    >
+                      <Plus size={15} />
+                      Add customer
+                    </Link>
+                  )}
+
+                </div>
+
+              ) : (
+
+                <ul className="list">
+
+                  {recentCustomers.map(
+                    (customer) => (
+
+                      <li
+                        className="list-item"
+                        key={customer._id}
+                      >
+
+                        <div className="avatar">
+                          {customer.name
+                            ?.charAt(0)
+                            .toUpperCase() || "?"}
+                        </div>
+
+
+                        <div className="item-main">
+
+                          <div className="item-title">
+                            {customer.name}
+                          </div>
+
+                          <div className="item-meta">
+
+                            {[
+                              customer.company,
+                              customer.email,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+
+                          </div>
+
+                        </div>
+
+                      </li>
+
+                    )
+                  )}
+
+                </ul>
+
+              )}
+
+            </section>
+
+          </div>
+
         </>
       )}
+
     </div>
   );
 }
 
-export default Dashboard;
+
+/* ========================================================
+   STAT CARD
+   ======================================================== */
+
+function Stat({
+  label,
+  value,
+  icon: Icon,
+  href,
+}) {
+  return (
+    <Link
+      to={href}
+      className="card stat"
+      aria-label={`${label}: ${value}`}
+    >
+
+      <div>
+
+        <div className="stat-label">
+          {label}
+        </div>
+
+        <div className="stat-value">
+          {value}
+        </div>
+
+      </div>
+
+
+      <div className="stat-icon">
+        <Icon size={20} />
+      </div>
+
+    </Link>
+  );
+}

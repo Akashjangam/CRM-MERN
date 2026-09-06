@@ -1,104 +1,365 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AuthShell } from "../components/layout/AuthShell";
-import { Button } from "../components/ui/Button";
-import { FormBanner } from "../components/ui/Feedback";
-import { TextInput } from "../components/ui/Field";
+import { CheckCircle2, FolderKanban } from "lucide-react";
+
 import { useAuth } from "../context/AuthContext";
 import { getErrorMessage } from "../services/api";
 
-function Register() {
-  const { register } = useAuth();
+
+export default function Register() {
+  const { register, isAuthenticated } = useAuth();
+
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
+
+  const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
   });
+
   const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleChange = (event) => {
-    setFormData((current) => ({
-      ...current,
-      [event.target.name]: event.target.value,
+
+  /* ======================================================
+     UPDATE FIELD
+     ====================================================== */
+
+  const updateField = (field, value) => {
+    setForm((previous) => ({
+      ...previous,
+      [field]: value,
     }));
-  };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setError("");
-    setSubmitting(true);
-
-    try {
-      await register(formData);
-      navigate("/", { state: { registered: true } });
-    } catch (err) {
-      setError(getErrorMessage(err, "Registration failed. Try a different email."));
-    } finally {
-      setSubmitting(false);
+    if (error) {
+      setError("");
     }
   };
 
+
+  /* ======================================================
+     SUBMIT
+     ====================================================== */
+
+  const submit = async (event) => {
+    event.preventDefault();
+
+    setError("");
+
+    const name = form.name.trim();
+    const email = form.email.trim();
+    const password = form.password;
+
+
+    /* ----------------------------------------------------
+       Basic validation
+       ---------------------------------------------------- */
+
+    if (!name) {
+      setError("Please enter your full name.");
+      return;
+    }
+
+    if (!email) {
+      setError("Please enter your email address.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError(
+        "Password must be at least 6 characters."
+      );
+      return;
+    }
+
+
+    setLoading(true);
+
+
+    try {
+      await register({
+        name,
+        email,
+        password,
+      });
+
+
+      /*
+       * Registration completed successfully.
+       *
+       * Do NOT automatically redirect to dashboard here.
+       * Send the user to Login and show confirmation.
+       */
+
+      navigate("/login", {
+        replace: true,
+        state: {
+          registered: true,
+        },
+      });
+
+    } catch (err) {
+      setError(
+        getErrorMessage(
+          err,
+          "Registration failed. Try a different email."
+        )
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  /* ======================================================
+     AUTHENTICATED USER
+     ====================================================== */
+
+  if (isAuthenticated) {
+    return null;
+  }
+
+
+  /* ======================================================
+     RENDER
+     ====================================================== */
+
   return (
-    <AuthShell
-      title="Create an account"
-      subtitle="Register to manage customers and support cases."
-    >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <FormBanner>{error}</FormBanner>
+    <div className="auth-page">
 
-        <TextInput
-          id="name"
-          name="name"
-          type="text"
-          label="Name"
-          autoComplete="name"
-          placeholder="Alex Rivera"
-          value={formData.name}
-          onChange={handleChange}
-          required
-        />
+      {/* ==================================================
+          BRAND SECTION
+          ================================================== */}
 
-        <TextInput
-          id="email"
-          name="email"
-          type="email"
-          label="Email"
-          autoComplete="email"
-          placeholder="you@company.com"
-          value={formData.email}
-          onChange={handleChange}
-          required
-        />
+      <section className="auth-brand">
 
-        <TextInput
-          id="password"
-          name="password"
-          type="password"
-          label="Password"
-          autoComplete="new-password"
-          hint="At least 6 characters."
-          placeholder="Create a password"
-          minLength={6}
-          value={formData.password}
-          onChange={handleChange}
-          required
-        />
+        <div className="auth-brand-inner">
 
-        <Button type="submit" className="w-full" disabled={submitting}>
-          {submitting ? "Creating account…" : "Create account"}
-        </Button>
-      </form>
+          <div className="brand-mark">
+            <FolderKanban size={25} />
+          </div>
 
-      <p className="mt-5 text-center text-sm text-muted">
-        Already registered?{" "}
-        <Link to="/" className="font-medium text-accent hover:underline">
-          Sign in
-        </Link>
-      </p>
-    </AuthShell>
+          <h1>
+            Build better customer relationships.
+          </h1>
+
+          <p>
+            Keep customer details, support cases,
+            assignments, and activities connected
+            in one clean workspace.
+          </p>
+
+        </div>
+
+      </section>
+
+
+      {/* ==================================================
+          REGISTER PANEL
+          ================================================== */}
+
+      <section className="auth-panel">
+
+        <div className="auth-card">
+
+          {/* Logo */}
+
+          <div className="auth-logo-row">
+
+            <div className="brand-mark">
+              <FolderKanban size={19} />
+            </div>
+
+            <div className="auth-logo">
+              CRM Workspace
+            </div>
+
+          </div>
+
+
+          {/* Header */}
+
+          <div className="auth-header">
+
+            <div className="auth-kicker">
+              Get started
+            </div>
+
+            <h1 className="auth-title">
+              Create account
+            </h1>
+
+            <p className="auth-subtitle">
+              Create your CRM workspace account
+              in a few seconds.
+            </p>
+
+          </div>
+
+
+          {/* Error */}
+
+          {error && (
+            <div
+              className="banner banner-error"
+              style={{ marginBottom: 16 }}
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
+
+
+          {/* Form */}
+
+          <form
+            className="auth-form"
+            onSubmit={submit}
+          >
+
+            {/* Full Name */}
+
+            <div className="field">
+
+              <label
+                className="field-label"
+                htmlFor="register-name"
+              >
+                Full name
+              </label>
+
+              <input
+                id="register-name"
+                name="name"
+                type="text"
+                autoComplete="name"
+                placeholder="Your full name"
+                value={form.name}
+                onChange={(event) =>
+                  updateField(
+                    "name",
+                    event.target.value
+                  )
+                }
+                required
+                disabled={loading}
+              />
+
+            </div>
+
+
+            {/* Email */}
+
+            <div className="field">
+
+              <label
+                className="field-label"
+                htmlFor="register-email"
+              >
+                Email address
+              </label>
+
+              <input
+                id="register-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@company.com"
+                value={form.email}
+                onChange={(event) =>
+                  updateField(
+                    "email",
+                    event.target.value
+                  )
+                }
+                required
+                disabled={loading}
+              />
+
+            </div>
+
+
+            {/* Password */}
+
+            <div className="field">
+
+              <label
+                className="field-label"
+                htmlFor="register-password"
+              >
+                Password
+              </label>
+
+              <input
+                id="register-password"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                minLength={6}
+                placeholder="At least 6 characters"
+                value={form.password}
+                onChange={(event) =>
+                  updateField(
+                    "password",
+                    event.target.value
+                  )
+                }
+                required
+                disabled={loading}
+              />
+
+            </div>
+
+
+            {/* Submit */}
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+            >
+
+              {loading ? (
+                <>
+                  <span
+                    className="spinner"
+                    aria-hidden="true"
+                  />
+
+                  Creating account…
+                </>
+              ) : (
+                "Create account"
+              )}
+
+            </button>
+
+          </form>
+
+
+          {/* Footer */}
+
+          <div className="auth-footer">
+
+            <CheckCircle2
+              size={14}
+              style={{
+                verticalAlign: "-2px",
+              }}
+            />
+
+            Secure authentication ·{" "}
+
+            <Link to="/login">
+              Sign in
+            </Link>
+
+          </div>
+
+        </div>
+
+      </section>
+
+    </div>
   );
 }
-
-export default Register;

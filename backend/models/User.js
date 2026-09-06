@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-// Schema for CRM application users
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -21,6 +20,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       minlength: 6,
+    },
+
+    role: {
+      type: String,
+      enum: ["admin", "agent", "customer"],
+      default: "customer",
     },
   },
   {

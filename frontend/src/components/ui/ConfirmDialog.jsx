@@ -1,55 +1,22 @@
-import { useEffect, useRef } from "react";
-import { Button } from "./Button";
-
-export function ConfirmDialog({
-  open,
-  title,
-  message,
-  confirmLabel = "Confirm",
-  danger = false,
-  onConfirm,
-  onCancel,
-}) {
-  const dialogRef = useRef(null);
-  const confirmRef = useRef(null);
-
-  useEffect(() => {
-    const node = dialogRef.current;
-    if (!node) return;
-
-    if (open) {
-      if (!node.open) node.showModal();
-      confirmRef.current?.focus();
-    } else if (node.open) {
-      node.close();
-    }
-  }, [open]);
-
+export function ConfirmDialog({ open, title, message, confirmLabel = "Confirm", danger = false, onCancel, onConfirm }) {
+  if (!open) return null;
   return (
-    <dialog
-      ref={dialogRef}
-      className="w-full max-w-md rounded-md border border-line bg-surface p-0 shadow-none backdrop:bg-ink/40"
-      onCancel={onCancel}
-      onClick={(event) => {
-        if (event.target === dialogRef.current) onCancel();
-      }}
-    >
-      <div className="p-5">
-        <h2 className="text-base font-semibold text-ink">{title}</h2>
-        <p className="mt-2 text-sm text-muted">{message}</p>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="secondary" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            ref={confirmRef}
-            variant={danger ? "danger" : "primary"}
-            onClick={onConfirm}
-          >
-            {confirmLabel}
-          </Button>
+    <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+        <div className="modal-header">
+          <div>
+            <h2 className="modal-title" id="confirm-title">{title}</h2>
+            <p className="page-subtitle">{message}</p>
+          </div>
+          <button className="icon-btn" onClick={onCancel} aria-label="Close">×</button>
+        </div>
+        <div className="modal-body">
+          <div className="form-actions">
+            <button className={`btn ${danger ? "btn-danger" : "btn-primary"}`} onClick={onConfirm}>{confirmLabel}</button>
+            <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
+          </div>
         </div>
       </div>
-    </dialog>
+    </div>
   );
 }

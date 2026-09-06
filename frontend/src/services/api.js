@@ -1,7 +1,8 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+  timeout: 15000,
 });
 
 api.interceptors.request.use((config) => {
@@ -15,21 +16,16 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const status = error.response?.status;
-    const path = window.location.pathname;
-    const isAuthPage = path === "/" || path === "/register";
-
-    if (status === 401 && !isAuthPage) {
+    if (error.response?.status === 401 && !["/", "/register"].includes(window.location.pathname)) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       window.location.assign("/");
     }
-
     return Promise.reject(error);
   }
 );
 
-export function getErrorMessage(error, fallback) {
+export function getErrorMessage(error, fallback = "Something went wrong.") {
   return error.response?.data?.message || fallback;
 }
 

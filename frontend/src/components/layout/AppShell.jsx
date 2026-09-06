@@ -1,131 +1,430 @@
-import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import "./AppShell.css";
+
+import { useEffect, useState } from "react";
 import {
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+
+import {
+  Activity,
   FolderKanban,
   LayoutDashboard,
   LogOut,
   Menu,
+  ShieldCheck,
   Users,
   X,
 } from "lucide-react";
+
 import { useAuth } from "../../context/AuthContext";
-import { Button } from "../ui/Button";
+
+
+/* =========================================================
+   NAVIGATION LINKS
+   ========================================================= */
 
 const links = [
-  { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { to: "/customers", label: "Customers", icon: Users },
-  { to: "/cases", label: "Cases", icon: FolderKanban },
+  {
+    to: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    to: "/customers",
+    label: "Customers",
+    icon: Users,
+  },
+  {
+    to: "/cases",
+    label: "Cases",
+    icon: FolderKanban,
+  },
+  {
+    to: "/activities",
+    label: "Activities",
+    icon: Activity,
+  },
 ];
 
-function NavItems({ onNavigate }) {
-  return (
-    <ul className="space-y-1">
-      {links.map(({ to, label, icon: Icon }) => (
-        <li key={to}>
-          <NavLink
-            to={to}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              `flex items-center gap-2 rounded-md px-3 py-2 text-sm ${
-                isActive
-                  ? "bg-accent text-white"
-                  : "text-ink hover:bg-canvas"
-              }`
-            }
-          >
-            <Icon className="h-4 w-4" aria-hidden="true" />
-            {label}
-          </NavLink>
-        </li>
-      ))}
-    </ul>
-  );
-}
+
+/* =========================================================
+   APP SHELL
+   ========================================================= */
 
 export function AppShell() {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
 
-  const handleLogout = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [open, setOpen] = useState(false);
+
+
+  /* =======================================================
+     CLOSE MOBILE MENU WHEN ROUTE CHANGES
+     ======================================================= */
+
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
+
+
+  /* =======================================================
+     LOGOUT
+     ======================================================= */
+
+  const doLogout = () => {
+    setOpen(false);
+
     logout();
-    navigate("/");
+
+    navigate("/", {
+      replace: true,
+    });
   };
 
+
+  /* =======================================================
+     NAVIGATION
+     ======================================================= */
+
+  const renderNavigation = () => (
+    <nav aria-label="Primary navigation">
+
+      <div className="nav-section-title">
+        Workspace
+      </div>
+
+
+      <div className="nav-list">
+
+        {/* -----------------------------------------------
+            NORMAL NAVIGATION
+            ----------------------------------------------- */}
+
+        {links.map(
+          ({
+            to,
+            label,
+            icon: Icon,
+          }) => (
+
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                `nav-link ${
+                  isActive ? "active" : ""
+                }`
+              }
+            >
+
+              <Icon
+                size={18}
+                aria-hidden="true"
+              />
+
+              <span>
+                {label}
+              </span>
+
+            </NavLink>
+
+          )
+        )}
+
+
+        {/* -----------------------------------------------
+            ADMIN ONLY - USERS
+            ----------------------------------------------- */}
+
+        {user?.role === "admin" && (
+
+          <NavLink
+            to="/users"
+            className={({ isActive }) =>
+              `nav-link ${
+                isActive ? "active" : ""
+              }`
+            }
+          >
+
+            <ShieldCheck
+              size={18}
+              aria-hidden="true"
+            />
+
+            <span>
+              Users
+            </span>
+
+          </NavLink>
+
+        )}
+
+      </div>
+
+    </nav>
+  );
+
+
+  /* =======================================================
+     RENDER
+     ======================================================= */
+
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[15rem_1fr]">
+    <div className="app-shell">
+
+      {/* ==================================================
+          SKIP TO CONTENT
+          ================================================== */}
+
       <a
+        className="skip-link"
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2"
       >
         Skip to content
       </a>
 
-      <aside className="hidden border-r border-line bg-surface lg:flex lg:flex-col lg:p-4">
-        <div className="flex items-center gap-2 px-2 py-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-accent text-white">
-            <FolderKanban className="h-4 w-4" aria-hidden="true" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold">CRM</p>
-            <p className="text-xs text-muted">Customer records</p>
+
+      {/* ==================================================
+          DESKTOP SIDEBAR
+          ================================================== */}
+
+      <aside className="sidebar desktop-only">
+
+        {/* -----------------------------------------------
+            BRAND
+            ----------------------------------------------- */}
+
+        <div className="sidebar-brand">
+
+          <div className="brand-mark">
+            <FolderKanban size={22} />
           </div>
+
+
+          <div>
+
+            <div className="brand-name">
+              CRM
+            </div>
+
+            <div className="brand-caption">
+              Customer management
+            </div>
+
+          </div>
+
         </div>
-        <nav aria-label="Main" className="mt-4 flex-1">
-          <NavItems />
-        </nav>
-        <div className="border-t border-line pt-4">
-          <p className="truncate px-2 text-sm font-medium">{user?.name || "Signed in"}</p>
-          <p className="truncate px-2 text-xs text-muted">{user?.email}</p>
-          <Button
-            variant="ghost"
-            className="mt-3 w-full justify-start"
-            onClick={handleLogout}
+
+
+        {/* -----------------------------------------------
+            NAVIGATION
+            ----------------------------------------------- */}
+
+        <div className="sidebar-nav">
+          {renderNavigation()}
+        </div>
+
+
+        {/* -----------------------------------------------
+            USER / LOGOUT
+            ----------------------------------------------- */}
+
+        <div className="sidebar-footer">
+
+          <UserSummary user={user} />
+
+
+          <button
+            type="button"
+            className="btn btn-ghost logout-btn"
+            onClick={doLogout}
           >
-            <LogOut className="h-4 w-4" aria-hidden="true" />
+
+            <LogOut
+              size={17}
+              aria-hidden="true"
+            />
+
             Log out
-          </Button>
+
+          </button>
+
         </div>
+
       </aside>
 
-      <div className="flex min-h-screen flex-col">
-        <header className="flex items-center justify-between border-b border-line bg-surface px-4 py-3 lg:hidden">
-          <p className="text-sm font-semibold">CRM</p>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-expanded={menuOpen}
-            aria-controls="mobile-nav"
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            onClick={() => setMenuOpen((open) => !open)}
+
+      {/* ==================================================
+          MAIN CONTENT AREA
+          ================================================== */}
+
+      <div className="main">
+
+        {/* =================================================
+            MOBILE HEADER
+            ================================================= */}
+
+        <header className="mobile-header mobile-only">
+
+          <div className="mobile-brand">
+
+            <div className="brand-mark">
+              <FolderKanban size={18} />
+            </div>
+
+            <strong>
+              CRM
+            </strong>
+
+          </div>
+
+
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={
+              open
+                ? "Close navigation"
+                : "Open navigation"
+            }
+            aria-expanded={open}
+            aria-controls="mobile-navigation"
+            onClick={() =>
+              setOpen(
+                (value) => !value
+              )
+            }
           >
-            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
+
+            {open ? (
+              <X size={20} />
+            ) : (
+              <Menu size={20} />
+            )}
+
+          </button>
+
         </header>
 
-        {menuOpen ? (
-          <div
-            id="mobile-nav"
-            className="border-b border-line bg-surface p-4 lg:hidden"
-          >
-            <nav aria-label="Main">
-              <NavItems onNavigate={() => setMenuOpen(false)} />
-            </nav>
-            <Button
-              variant="ghost"
-              className="mt-3 w-full justify-start"
-              onClick={handleLogout}
-            >
-              <LogOut className="h-4 w-4" aria-hidden="true" />
-              Log out
-            </Button>
-          </div>
-        ) : null}
 
-        <main id="main-content" className="flex-1 p-4 sm:p-6">
+        {/* =================================================
+            MOBILE NAVIGATION
+            ================================================= */}
+
+        {open && (
+
+          <div
+            id="mobile-navigation"
+            className="mobile-nav mobile-only"
+          >
+
+            {renderNavigation()}
+
+
+            {/* Mobile User */}
+
+            <div className="mobile-user">
+
+              <UserSummary
+                user={user}
+              />
+
+            </div>
+
+
+            {/* Mobile Logout */}
+
+            <button
+              type="button"
+              className="btn btn-ghost logout-btn"
+              onClick={doLogout}
+            >
+
+              <LogOut
+                size={17}
+                aria-hidden="true"
+              />
+
+              Log out
+
+            </button>
+
+          </div>
+
+        )}
+
+
+        {/* =================================================
+            PAGE CONTENT
+            ================================================= */}
+
+        <main
+          id="main-content"
+          tabIndex="-1"
+        >
           <Outlet />
         </main>
+
       </div>
+
+    </div>
+  );
+}
+
+
+/* =========================================================
+   USER SUMMARY
+   ========================================================= */
+
+function UserSummary({ user }) {
+  const initial =
+    (user?.name || "U")
+      .charAt(0)
+      .toUpperCase();
+
+
+  return (
+    <div className="user-summary">
+
+      {/* Avatar */}
+
+      <div className="avatar">
+        {initial}
+      </div>
+
+
+      {/* User Details */}
+
+      <div className="item-main">
+
+        <div className="item-title">
+          {user?.name || "Signed in"}
+        </div>
+
+
+        <div className="item-meta">
+          {user?.email || ""}
+        </div>
+
+
+        {/* Role */}
+
+        {user?.role && (
+
+          <span className="role-pill">
+            {user.role}
+          </span>
+
+        )}
+
+      </div>
+
     </div>
   );
 }
