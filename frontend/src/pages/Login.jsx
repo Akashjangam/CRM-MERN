@@ -1,476 +1,183 @@
 import { useState } from "react";
-import {
-  Link,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
 
-import {
-  CheckCircle2,
-  FolderKanban,
-  ShieldCheck,
-  Users,
-  Zap,
-} from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+
+import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+
 import { getErrorMessage } from "../services/api";
 
-
 export default function Login() {
-  const { login } = useAuth();
-
   const navigate = useNavigate();
+
   const location = useLocation();
+
+  const { login } = useAuth();
 
   const [form, setForm] = useState({
     email: "",
     password: "",
   });
 
-  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
   const [loading, setLoading] = useState(false);
 
-  const registered = Boolean(
-    location.state?.registered
-  );
+  const [error, setError] = useState("");
 
+  /* =======================================================
+     INPUT CHANGE
+  ======================================================= */
 
-  /* ======================================================
-     FORM CHANGE
-     ====================================================== */
+  function handleChange(event) {
+    const { name, value } = event.target;
 
-  const updateField = (field, value) => {
     setForm((previous) => ({
       ...previous,
-      [field]: value,
+      [name]: value,
     }));
 
-    if (error) {
-      setError("");
-    }
-  };
+    setError("");
+  }
 
+  /* =======================================================
+     SUBMIT
+  ======================================================= */
 
-  /* ======================================================
-     LOGIN
-     ====================================================== */
-
-  const submit = async (event) => {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     setError("");
 
-    const email = form.email.trim();
-    const password = form.password;
-
-    /* ----------------------------------------------------
-       VALIDATION
-       ---------------------------------------------------- */
-
-    if (!email) {
-      setError(
-        "Please enter your email address."
-      );
+    if (!form.email.trim()) {
+      setError("Email is required.");
       return;
     }
 
-    if (!password) {
-      setError(
-        "Please enter your password."
-      );
+    if (!form.password) {
+      setError("Password is required.");
       return;
     }
-
-    setLoading(true);
 
     try {
-      /* --------------------------------------------------
-         CALL LOGIN API
-         -------------------------------------------------- */
+      setLoading(true);
 
       const data = await login({
-        email,
-        password,
+        email: form.email.trim(),
+        password: form.password,
       });
 
+      console.log("LOGIN SUCCESS:", data);
 
-      /* --------------------------------------------------
-         DEBUG / VERIFICATION
-         -------------------------------------------------- */
+      /* --------------------------------
+         Verify JWT
+      -------------------------------- */
 
-      console.log(
-        "LOGIN SUCCESS:",
-        data
-      );
+      const savedToken = localStorage.getItem("token");
 
-      console.log(
-        "TOKEN STORED:",
-        localStorage.getItem("token")
-          ? "YES"
-          : "NO"
-      );
+      console.log("SAVED JWT:", savedToken);
 
-      console.log(
-        "USER STORED:",
-        localStorage.getItem("user")
-      );
-
-
-      /* --------------------------------------------------
-         VERIFY TOKEN WAS STORED
-         -------------------------------------------------- */
-
-      const storedToken =
-        localStorage.getItem("token");
-
-      if (!storedToken) {
-        setError(
-          "Login succeeded, but authentication token was not stored. Please try again."
-        );
-
-        return;
+      if (!savedToken) {
+        throw new Error("Login succeeded, but JWT token was not saved.");
       }
 
+      /* --------------------------------
+         Redirect
+      -------------------------------- */
 
-      /* --------------------------------------------------
-         REDIRECT
-         -------------------------------------------------- */
+      const from = location.state?.from?.pathname || "/dashboard";
 
-      const redirectPath =
-        location.state?.from?.pathname ||
-        "/dashboard";
+      navigate(from, {
+        replace: true,
+      });
+    } catch (error) {
+      console.error("LOGIN ERROR:", error);
 
-      navigate(
-        redirectPath,
-        {
-          replace: true,
-        }
-      );
-
-    } catch (err) {
-
-      console.error(
-        "LOGIN ERROR:",
-        err
-      );
-
-      setError(
-        getErrorMessage(
-          err,
-          "Login failed. Check your email and password."
-        )
-      );
-
+      setError(getErrorMessage(error, "Invalid email or password."));
     } finally {
       setLoading(false);
     }
-  };
-
-
-  /* ======================================================
-     RENDER
-     ====================================================== */
+  }
 
   return (
     <div className="auth-page">
-
-      {/* ==================================================
-          BRAND SECTION
-          ================================================== */}
-
-      <section className="auth-brand">
-
-        <div className="auth-brand-inner">
-
-          <div className="brand-mark">
-            <FolderKanban size={25} />
+      <div className="auth-card">
+        <div className="auth-header">
+          <div className="auth-icon">
+            <LockKeyhole size={24} />
           </div>
 
+          <h1>Welcome back</h1>
 
-          <h1>
-            Customer relationships,
-            organized.
-          </h1>
-
-
-          <p>
-            A focused CRM workspace for
-            managing customers, support cases,
-            assignments, and interaction history.
-          </p>
-
-
-          <div className="auth-feature-list">
-
-            {/* Customer records */}
-
-            <div className="auth-feature">
-
-              <span>
-                <Users size={15} />
-              </span>
-
-              Customer records in one workspace
-
-            </div>
-
-
-            {/* Secure access */}
-
-            <div className="auth-feature">
-
-              <span>
-                <ShieldCheck size={15} />
-              </span>
-
-              Secure authenticated access
-
-            </div>
-
-
-            {/* Case tracking */}
-
-            <div className="auth-feature">
-
-              <span>
-                <Zap size={15} />
-              </span>
-
-              Track cases and follow-ups faster
-
-            </div>
-
-          </div>
-
+          <p>Sign in to your CRM account</p>
         </div>
 
-      </section>
+        {error && <div className="alert alert-error">{error}</div>}
 
+        <form onSubmit={handleSubmit}>
+          {/* EMAIL */}
 
-      {/* ==================================================
-          LOGIN PANEL
-          ================================================== */}
+          <div className="form-group">
+            <label htmlFor="email">Email</label>
 
-      <section className="auth-panel">
-
-        <div className="auth-card">
-
-          {/* =================================================
-              LOGO
-              ================================================= */}
-
-          <div className="auth-logo-row">
-
-            <div className="brand-mark">
-              <FolderKanban size={19} />
-            </div>
-
-            <div className="auth-logo">
-              CRM Workspace
-            </div>
-
-          </div>
-
-
-          {/* =================================================
-              HEADER
-              ================================================= */}
-
-          <div className="auth-header">
-
-            <div className="auth-kicker">
-              Welcome back
-            </div>
-
-            <h1 className="auth-title">
-              Sign in
-            </h1>
-
-            <p className="auth-subtitle">
-              Use your work account to access
-              your CRM workspace.
-            </p>
-
-          </div>
-
-
-          {/* =================================================
-              REGISTRATION SUCCESS
-              ================================================= */}
-
-          {registered && !error && (
-
-            <div
-              className="banner banner-success"
-              style={{
-                marginBottom: 16,
-              }}
-              role="status"
-            >
-
-              <CheckCircle2
-                size={15}
-                aria-hidden="true"
-              />
-
-              <span>
-                Account created successfully.
-                Sign in to continue.
-              </span>
-
-            </div>
-
-          )}
-
-
-          {/* =================================================
-              LOGIN ERROR
-              ================================================= */}
-
-          {error && (
-
-            <div
-              className="banner banner-error"
-              style={{
-                marginBottom: 16,
-              }}
-              role="alert"
-            >
-              {error}
-            </div>
-
-          )}
-
-
-          {/* =================================================
-              LOGIN FORM
-              ================================================= */}
-
-          <form
-            className="auth-form"
-            onSubmit={submit}
-            noValidate
-          >
-
-            {/* =================================================
-                EMAIL
-                ================================================= */}
-
-            <div className="field">
-
-              <label
-                className="field-label"
-                htmlFor="login-email"
-              >
-                Email address
-              </label>
+            <div className="input-with-icon">
+              <Mail size={18} />
 
               <input
-                id="login-email"
+                id="email"
                 name="email"
                 type="email"
-                autoComplete="email"
-                placeholder="you@company.com"
                 value={form.email}
-                onChange={(event) =>
-                  updateField(
-                    "email",
-                    event.target.value
-                  )
-                }
-                required
-                disabled={loading}
+                onChange={handleChange}
+                placeholder="Enter your email"
+                autoComplete="email"
               />
-
             </div>
-
-
-            {/* =================================================
-                PASSWORD
-                ================================================= */}
-
-            <div className="field">
-
-              <label
-                className="field-label"
-                htmlFor="login-password"
-              >
-                Password
-              </label>
-
-              <input
-                id="login-password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="Enter your password"
-                value={form.password}
-                onChange={(event) =>
-                  updateField(
-                    "password",
-                    event.target.value
-                  )
-                }
-                required
-                disabled={loading}
-              />
-
-            </div>
-
-
-            {/* =================================================
-                SUBMIT BUTTON
-                ================================================= */}
-
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading}
-            >
-
-              {loading ? (
-
-                <>
-
-                  <span
-                    className="spinner"
-                    aria-hidden="true"
-                  />
-
-                  Signing in…
-
-                </>
-
-              ) : (
-
-                "Sign in"
-
-              )}
-
-            </button>
-
-          </form>
-
-
-          {/* =================================================
-              FOOTER
-              ================================================= */}
-
-          <div className="auth-footer">
-
-            Don't have an account?{" "}
-
-            <Link to="/register">
-              Create an account
-            </Link>
-
           </div>
 
+          {/* PASSWORD */}
+
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+
+            <div className="input-with-icon">
+              <LockKeyhole size={18} />
+
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                value={form.password}
+                onChange={handleChange}
+                placeholder="Enter your password"
+                autoComplete="current-password"
+              />
+
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword((value) => !value)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          {/* SUBMIT */}
+
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
+
+        <div className="auth-footer">
+          <span>Don't have an account?</span>
+
+          <Link to="/register">Create account</Link>
         </div>
-
-      </section>
-
+      </div>
     </div>
   );
 }
