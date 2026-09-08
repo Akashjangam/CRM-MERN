@@ -1,7 +1,13 @@
 import axios from "axios";
 
+const defaultApiUrl =
+  import.meta.env.VITE_API_URL ||
+  (window.location.hostname === "localhost"
+    ? "http://localhost:5000/api"
+    : "https://crm-mern-it4g.onrender.com/api");
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+  baseURL: defaultApiUrl,
 
   timeout: 15000,
 

@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import Customer from "../models/Customer.js";
 
 const createToken = (user) =>
   jwt.sign(
@@ -44,6 +45,18 @@ export const register = async (req, res, next) => {
       password: hashedPassword,
       role: safeRole,
     });
+
+    if (safeRole === "customer") {
+      await Customer.create({
+        user: user._id,
+        name: user.name,
+        email: user.email,
+        phone: "",
+        company: "",
+        status: "active",
+        createdBy: user._id,
+      });
+    }
 
     const token = createToken(user);
 

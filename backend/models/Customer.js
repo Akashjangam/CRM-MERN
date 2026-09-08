@@ -2,6 +2,12 @@ import mongoose from "mongoose";
 
 const customerSchema = new mongoose.Schema(
   {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      unique: true,
+      sparse: true,
+    },
     name: {
       type: String,
       required: [true, "Name is required"],
@@ -16,8 +22,8 @@ const customerSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: [true, "Phone is required"],
       trim: true,
+      default: "",
     },
     company: {
       type: String,
