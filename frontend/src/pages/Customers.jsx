@@ -83,6 +83,24 @@ export default function Customers() {
   const canDelete =
     role === "admin";
 
+  const summaryStats = useMemo(() => [
+    {
+      label: "Customers",
+      value: items.length,
+      trend: `${filtered.length} matching`,
+    },
+    {
+      label: "Companies",
+      value: new Set(items.map((item) => item.company).filter(Boolean)).size,
+      trend: "Tracked records",
+    },
+    {
+      label: "Contact coverage",
+      value: `${Math.round((items.filter((item) => item.email || item.phone).length / Math.max(items.length, 1)) * 100)}%`,
+      trend: "with email or phone",
+    },
+  ], [filtered.length, items]);
+
 
   /* =======================================================
      LOAD CUSTOMERS
@@ -350,15 +368,30 @@ export default function Customers() {
 
 
         {canCreate && (
-          <Button
-            onClick={openNewCustomer}
-          >
-            <Plus size={17} />
-            Add customer
-          </Button>
+          <div className="actions">
+            <Button onClick={openNewCustomer}>
+              <Plus size={17} />
+              Add customer
+            </Button>
+          </div>
         )}
 
       </header>
+
+      <div className="page-summary">
+        {summaryStats.map((stat) => (
+          <div key={stat.label} className="summary-card">
+            <div>
+              <div className="summary-label">{stat.label}</div>
+              <div className="summary-value">{stat.value}</div>
+              <div className="summary-trend">{stat.trend}</div>
+            </div>
+            <div className="brand-mark">
+              <Users size={18} />
+            </div>
+          </div>
+        ))}
+      </div>
 
 
       {/* ===================================================
@@ -526,6 +559,10 @@ export default function Customers() {
 
           </div>
 
+          <div className="toolbar-meta">
+            <span>{filtered.length} shown</span>
+          </div>
+
         </div>
 
 
@@ -615,9 +652,14 @@ export default function Customers() {
                         {/* Customer */}
 
                         <td>
-                          <strong>
-                            {customer.name}
-                          </strong>
+                          <div className="table-leading">
+                            <span className="text-strong">
+                              {customer.name}
+                            </span>
+                            <span className="item-meta">
+                              {customer.company || "No company listed"}
+                            </span>
+                          </div>
                         </td>
 
 
@@ -625,12 +667,9 @@ export default function Customers() {
 
                         <td>
 
-                          <div>
-                            {customer.email}
-                          </div>
-
-                          <div className="item-meta">
-                            {customer.phone}
+                          <div className="table-leading">
+                            <span>{customer.email || "No email"}</span>
+                            <span className="item-meta">{customer.phone || "No phone"}</span>
                           </div>
 
                         </td>
@@ -639,8 +678,9 @@ export default function Customers() {
                         {/* Company */}
 
                         <td>
-                          {customer.company ||
-                            "—"}
+                          <span className={customer.company ? "table-tag" : "table-tag table-tag-muted"}>
+                            {customer.company || "No company"}
+                          </span>
                         </td>
 
 
@@ -659,12 +699,7 @@ export default function Customers() {
 
                         <td>
 
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 4,
-                            }}
-                          >
+                          <div className="table-actions">
 
                             {/* Edit */}
 

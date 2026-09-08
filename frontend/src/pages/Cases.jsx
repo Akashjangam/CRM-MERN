@@ -89,6 +89,30 @@ export default function Cases() {
 
   const canDelete = ["admin", "agent"].includes(role);
 
+  const summaryStats = useMemo(() => {
+    const openCount = items.filter((item) => item.status === "Open").length;
+    const inProgressCount = items.filter((item) => item.status === "In Progress").length;
+    const highPriorityCount = items.filter((item) => item.priority === "High").length;
+
+    return [
+      {
+        label: "Visible cases",
+        value: items.length,
+        trend: `${openCount} open`,
+      },
+      {
+        label: "In progress",
+        value: inProgressCount,
+        trend: `${highPriorityCount} high priority`,
+      },
+      {
+        label: "Assigned",
+        value: items.filter((item) => item.assignedTo?.name).length,
+        trend: `${items.filter((item) => !item.assignedTo?.name).length} unassigned`,
+      },
+    ];
+  }, [items]);
+
   /* =======================================================
      LOAD CASES
      ======================================================= */
@@ -404,15 +428,32 @@ export default function Cases() {
         </div>
 
         {canCreate && (
-          <Button
-            onClick={openNewCase}
-            disabled={!isCustomer && !customers.length}
-          >
-            <Plus size={17} />
-            New case
-          </Button>
+          <div className="actions">
+            <Button
+              onClick={openNewCase}
+              disabled={!isCustomer && !customers.length}
+            >
+              <Plus size={17} />
+              New case
+            </Button>
+          </div>
         )}
       </header>
+
+      <div className="page-summary">
+        {summaryStats.map((stat) => (
+          <div key={stat.label} className="summary-card">
+            <div>
+              <div className="summary-label">{stat.label}</div>
+              <div className="summary-value">{stat.value}</div>
+              <div className="summary-trend">{stat.trend}</div>
+            </div>
+            <div className="brand-mark">
+              <FolderKanban size={18} />
+            </div>
+          </div>
+        ))}
+      </div>
 
       {/* ==================================================
           CUSTOMER WARNING
@@ -610,22 +651,28 @@ export default function Cases() {
             />
           </div>
 
-          <Select
-            id="status-filter"
-            label="Filter by status"
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-          >
-            <option value="All">All</option>
+          <div className="toolbar-meta">
+            <span>{filtered.length} shown</span>
+          </div>
 
-            <option value="Open">Open</option>
+          <div style={{ minWidth: 180 }}>
+            <Select
+              id="status-filter"
+              label="Filter by status"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
+              <option value="All">All</option>
 
-            <option value="In Progress">In Progress</option>
+              <option value="Open">Open</option>
 
-            <option value="Resolved">Resolved</option>
+              <option value="In Progress">In Progress</option>
 
-            <option value="Closed">Closed</option>
-          </Select>
+              <option value="Resolved">Resolved</option>
+
+              <option value="Closed">Closed</option>
+            </Select>
+          </div>
         </div>
 
         {/* =================================================
@@ -699,9 +746,10 @@ export default function Cases() {
                     {/* Case */}
 
                     <td>
-                      <strong>{item.title}</strong>
-
-                      <div className="item-meta">{item.description}</div>
+                      <div className="table-leading">
+                        <span className="text-strong">{item.title}</span>
+                        <span className="item-meta">{item.description}</span>
+                      </div>
                     </td>
 
                     {/* Customer */}
@@ -712,15 +760,12 @@ export default function Cases() {
 
                     <td>
                       {item.assignedTo?.name ? (
-                        <>
-                          <strong>{item.assignedTo.name}</strong>
-
-                          <div className="item-meta">
-                            {item.assignedTo.role}
-                          </div>
-                        </>
+                        <div className="table-leading">
+                          <span className="text-strong">{item.assignedTo.name}</span>
+                          <span className="item-meta">{item.assignedTo.role}</span>
+                        </div>
                       ) : (
-                        "Unassigned"
+                        <span className="table-tag table-tag-muted">Unassigned</span>
                       )}
                     </td>
 
@@ -747,12 +792,7 @@ export default function Cases() {
                     {/* Actions */}
 
                     <td>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 4,
-                        }}
-                      >
+                      <div className="table-actions">
                         {/* Edit */}
 
                         {canEdit && (

@@ -26,28 +26,25 @@ import { useAuth } from "../../context/AuthContext";
    NAVIGATION LINKS
    ========================================================= */
 
-const links = [
-  {
-    to: "/dashboard",
-    label: "Dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    to: "/customers",
-    label: "Customers",
-    icon: Users,
-  },
-  {
-    to: "/cases",
-    label: "Cases",
-    icon: FolderKanban,
-  },
-  {
-    to: "/activities",
-    label: "Activities",
-    icon: Activity,
-  },
-];
+const navigationMap = {
+  admin: [
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/customers", label: "Customers", icon: Users },
+    { to: "/cases", label: "Cases", icon: FolderKanban },
+    { to: "/activities", label: "Activities", icon: Activity },
+  ],
+  agent: [
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/cases", label: "Cases", icon: FolderKanban },
+    { to: "/activities", label: "Activities", icon: Activity },
+  ],
+  customer: [
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/cases", label: "Cases", icon: FolderKanban },
+  ],
+};
+
+const links = navigationMap.admin;
 
 
 /* =========================================================
@@ -61,6 +58,7 @@ export function AppShell() {
   const location = useLocation();
 
   const [open, setOpen] = useState(false);
+  const roleLinks = navigationMap[user?.role] || navigationMap.customer;
 
 
   /* =======================================================
@@ -105,7 +103,7 @@ export function AppShell() {
             NORMAL NAVIGATION
             ----------------------------------------------- */}
 
-        {links.map(
+        {roleLinks.map(
           ({
             to,
             label,

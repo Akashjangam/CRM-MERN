@@ -23,6 +23,24 @@ const roles = [
 export default function Users() {
   const { user } = useAuth();
 
+  const summaryStats = [
+    {
+      label: "Total users",
+      value: users.length,
+      trend: "All accounts",
+    },
+    {
+      label: "Agents",
+      value: users.filter((item) => item.role === "agent").length,
+      trend: "Operational team",
+    },
+    {
+      label: "Admins",
+      value: users.filter((item) => item.role === "admin").length,
+      trend: "Access managers",
+    },
+  ];
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -144,6 +162,21 @@ export default function Users() {
 
       </header>
 
+      <div className="page-summary">
+        {summaryStats.map((stat) => (
+          <div key={stat.label} className="summary-card">
+            <div>
+              <div className="summary-label">{stat.label}</div>
+              <div className="summary-value">{stat.value}</div>
+              <div className="summary-trend">{stat.trend}</div>
+            </div>
+            <div className="brand-mark">
+              <ShieldCheck size={18} />
+            </div>
+          </div>
+        ))}
+      </div>
+
 
       {/* ==================================================
           SUCCESS / ERROR
@@ -221,13 +254,7 @@ export default function Users() {
 
                     <td>
 
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                        }}
-                      >
+                      <div className="avatar-row">
 
                         <div className="avatar">
                           {item.name
@@ -235,9 +262,10 @@ export default function Users() {
                             .toUpperCase() || "U"}
                         </div>
 
-                        <strong>
-                          {item.name}
-                        </strong>
+                        <div className="table-leading">
+                          <span className="text-strong">{item.name}</span>
+                          <span className="item-meta">{item.role || "customer"}</span>
+                        </div>
 
                       </div>
 
@@ -254,6 +282,10 @@ export default function Users() {
                     {/* Role */}
 
                     <td>
+
+                      <span className={`role-badge ${item.role === "customer" ? "role-badge-ghost" : ""}`}>
+                        {item.role || "customer"}
+                      </span>
 
                       <Select
                         id={`role-${item._id}`}

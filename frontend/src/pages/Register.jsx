@@ -91,7 +91,7 @@ export default function Register() {
        * Send the user to Login and show confirmation.
        */
 
-      navigate("/login", {
+      navigate("/", {
         replace: true,
         state: {
           registered: true,
