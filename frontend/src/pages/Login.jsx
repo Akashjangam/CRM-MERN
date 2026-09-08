@@ -1,6 +1,17 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+import {
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
+} from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
 import { getErrorMessage } from "../services/api";
@@ -59,10 +70,6 @@ export default function Login() {
         password,
       });
 
-      /*
-       * Verify that authentication data was persisted.
-       * Do NOT log the actual JWT.
-       */
       const savedToken = localStorage.getItem("token");
 
       if (!savedToken) {
@@ -75,7 +82,8 @@ export default function Login() {
       console.log("Authenticated user:", data?.user);
 
       const from =
-        location.state?.from?.pathname || "/dashboard";
+        location.state?.from?.pathname ||
+        "/dashboard";
 
       navigate(from, {
         replace: true,
@@ -96,138 +104,261 @@ export default function Login() {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
-        <div className="auth-header">
-          <div className="auth-icon" aria-hidden="true">
-            <LockKeyhole size={24} />
+
+      {/* =================================================
+          BRAND PANEL
+      ================================================= */}
+
+      <section className="auth-brand">
+        <div className="auth-brand-inner">
+
+          <div className="brand-mark">
+            <ShieldCheck size={22} />
           </div>
 
-          <h1>Welcome back</h1>
+          <h1>
+            Manage your CRM
+            <br />
+            with confidence.
+          </h1>
 
           <p>
-            Sign in to your CRM account
+            Manage customers, cases, activities,
+            and your team from one simple CRM workspace.
           </p>
-        </div>
 
-        {error && (
-          <div
-            className="alert alert-error"
-            role="alert"
-          >
-            {error}
-          </div>
-        )}
+          <div className="auth-feature-list">
 
-        <form onSubmit={handleSubmit} noValidate>
-          {/* EMAIL */}
-
-          <div className="form-group">
-            <label htmlFor="email">
-              Email
-            </label>
-
-            <div className="input-with-icon">
-              <Mail
-                size={18}
-                aria-hidden="true"
-              />
-
-              <input
-                id="email"
-                name="email"
-                type="email"
-                value={form.email}
-                onChange={handleChange}
-                placeholder="Enter your email"
-                autoComplete="email"
-                autoFocus
-                disabled={loading}
-                required
-              />
+            <div className="auth-feature">
+              <span>
+                <CheckCircle2 size={16} />
+              </span>
+              Customer management
             </div>
+
+            <div className="auth-feature">
+              <span>
+                <CheckCircle2 size={16} />
+              </span>
+              Case tracking and assignment
+            </div>
+
+            <div className="auth-feature">
+              <span>
+                <CheckCircle2 size={16} />
+              </span>
+              Role-based access
+            </div>
+
           </div>
 
-          {/* PASSWORD */}
+        </div>
+      </section>
 
-          <div className="form-group">
-            <label htmlFor="password">
-              Password
-            </label>
 
-            <div className="input-with-icon">
-              <LockKeyhole
-                size={18}
-                aria-hidden="true"
-              />
+      {/* =================================================
+          LOGIN PANEL
+      ================================================= */}
 
-              <input
-                id="password"
-                name="password"
-                type={
-                  showPassword
-                    ? "text"
-                    : "password"
-                }
-                value={form.password}
-                onChange={handleChange}
-                placeholder="Enter your password"
-                autoComplete="current-password"
-                disabled={loading}
-                required
-              />
+      <section className="auth-panel">
 
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() =>
-                  setShowPassword(
-                    (value) => !value
-                  )
-                }
-                disabled={loading}
-                aria-label={
-                  showPassword
-                    ? "Hide password"
-                    : "Show password"
-                }
-                title={
-                  showPassword
-                    ? "Hide password"
-                    : "Show password"
-                }
+        <div className="auth-card">
+
+          <div className="auth-logo-row">
+
+            <div className="brand-mark">
+              <ShieldCheck size={20} />
+            </div>
+
+            <span className="auth-logo">
+              CRM
+            </span>
+
+          </div>
+
+
+          <div className="auth-header">
+
+            <div className="auth-kicker">
+              Account access
+            </div>
+
+            <h2 className="auth-title">
+              Welcome back
+            </h2>
+
+            <p className="auth-subtitle">
+              Sign in to your CRM account
+            </p>
+
+          </div>
+
+
+          {error && (
+            <div
+              className="alert alert-error"
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
+
+
+          <form
+            className="auth-form"
+            onSubmit={handleSubmit}
+            noValidate
+          >
+
+            {/* EMAIL */}
+
+            <div className="field">
+
+              <label
+                className="field-label"
+                htmlFor="email"
               >
-                {showPassword ? (
-                  <EyeOff size={18} />
-                ) : (
-                  <Eye size={18} />
-                )}
-              </button>
+                Email address
+              </label>
+
+              <div className="input-with-icon">
+
+                <Mail
+                  size={18}
+                  aria-hidden="true"
+                />
+
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  autoFocus
+                  disabled={loading}
+                  required
+                />
+
+              </div>
+
             </div>
+
+
+            {/* PASSWORD */}
+
+            <div className="field">
+
+              <label
+                className="field-label"
+                htmlFor="password"
+              >
+                Password
+              </label>
+
+              <div className="input-with-icon">
+
+                <LockKeyhole
+                  size={18}
+                  aria-hidden="true"
+                />
+
+                <input
+                  id="password"
+                  name="password"
+                  type={
+                    showPassword
+                      ? "text"
+                      : "password"
+                  }
+                  value={form.password}
+                  onChange={handleChange}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  disabled={loading}
+                  required
+                />
+
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() =>
+                    setShowPassword(
+                      (value) => !value
+                    )
+                  }
+                  disabled={loading}
+                  aria-label={
+                    showPassword
+                      ? "Hide password"
+                      : "Show password"
+                  }
+                  title={
+                    showPassword
+                      ? "Hide password"
+                      : "Show password"
+                  }
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} />
+                  ) : (
+                    <Eye size={18} />
+                  )}
+                </button>
+
+              </div>
+
+            </div>
+
+
+            {/* SUBMIT */}
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span
+                    className="spinner"
+                    aria-hidden="true"
+                  />
+                  Signing in...
+                </>
+              ) : (
+                <>
+                  <LockKeyhole
+                    size={17}
+                    aria-hidden="true"
+                  />
+                  Sign in
+                </>
+              )}
+            </button>
+
+          </form>
+
+
+          {/* FOOTER */}
+
+          <div className="auth-footer">
+
+            <span>
+              Don't have an account?
+            </span>{" "}
+
+            <Link to="/register">
+              Create account
+            </Link>
+
           </div>
 
-          {/* SUBMIT */}
-
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={loading}
-          >
-            {loading
-              ? "Signing in..."
-              : "Sign in"}
-          </button>
-        </form>
-
-        <div className="auth-footer">
-          <span>
-            Don't have an account?
-          </span>
-
-          <Link to="/register">
-            Create account
-          </Link>
         </div>
-      </div>
+
+      </section>
+
     </div>
   );
 }
