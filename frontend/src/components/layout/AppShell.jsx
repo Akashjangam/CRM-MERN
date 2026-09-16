@@ -1,428 +1,303 @@
-import "./AppShell.css";
-
-import { useEffect, useState } from "react";
-import {
-  NavLink,
-  Outlet,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
-
+﻿import { useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity,
-  FolderKanban,
+  Bell,
+  BriefcaseBusiness,
+  ChevronDown,
   LayoutDashboard,
   LogOut,
   Menu,
-  ShieldCheck,
+  Search,
   Users,
   X,
 } from "lucide-react";
-
 import { useAuth } from "../../context/AuthContext";
+import "./AppShell.css";
 
+const links = [
+  {
+    to: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    to: "/customers",
+    label: "Customers",
+    icon: Users,
+  },
+  {
+    to: "/cases",
+    label: "Cases",
+    icon: BriefcaseBusiness,
+  },
+  {
+    to: "/activities",
+    label: "Activities",
+    icon: Activity,
+  },
+];
 
-/* =========================================================
-   NAVIGATION LINKS
-   ========================================================= */
+const adminLinks = [
+  {
+    to: "/users",
+    label: "Users",
+    icon: Users,
+  },
+];
 
-const navigationMap = {
-  admin: [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/customers", label: "Customers", icon: Users },
-    { to: "/cases", label: "Cases", icon: FolderKanban },
-    { to: "/activities", label: "Activities", icon: Activity },
-  ],
-  agent: [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/cases", label: "Cases", icon: FolderKanban },
-    { to: "/activities", label: "Activities", icon: Activity },
-  ],
-  customer: [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/cases", label: "Cases", icon: FolderKanban },
-  ],
-};
+function initials(name = "User") {
+  return (
+    name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "U"
+  );
+}
 
-const links = navigationMap.admin;
-
-
-/* =========================================================
-   APP SHELL
-   ========================================================= */
-
-export function AppShell() {
-  const { user, logout } = useAuth();
-
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const [open, setOpen] = useState(false);
-  const roleLinks = navigationMap[user?.role] || navigationMap.customer;
-
-
-  /* =======================================================
-     CLOSE MOBILE MENU WHEN ROUTE CHANGES
-     ======================================================= */
-
-  useEffect(() => {
-    setOpen(false);
-  }, [location.pathname]);
-
-
-  /* =======================================================
-     LOGOUT
-     ======================================================= */
-
-  const doLogout = () => {
-    setOpen(false);
-
-    logout();
-
-    navigate("/", {
-      replace: true,
-    });
-  };
-
-
-  /* =======================================================
-     NAVIGATION
-     ======================================================= */
-
-  const renderNavigation = () => (
+function NavItems({ onNavigate }) {
+  return (
     <nav aria-label="Primary navigation">
+      <div className="nav-group">
+        <div className="nav-group-label">Workspace</div>
 
-      <div className="nav-section-title">
-        Workspace
-      </div>
-
-
-      <div className="nav-list">
-
-        {/* -----------------------------------------------
-            NORMAL NAVIGATION
-            ----------------------------------------------- */}
-
-        {roleLinks.map(
-          ({
-            to,
-            label,
-            icon: Icon,
-          }) => (
-
+        <div className="nav-items">
+          {links.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
+              onClick={onNavigate}
               className={({ isActive }) =>
-                `nav-link ${
-                  isActive ? "active" : ""
-                }`
+                `nav-item ${isActive ? "is-active" : ""}`
               }
             >
-
-              <Icon
-                size={18}
-                aria-hidden="true"
-              />
-
-              <span>
-                {label}
-              </span>
-
+              <Icon size={18} strokeWidth={2} />
+              <span>{label}</span>
             </NavLink>
-
-          )
-        )}
-
-
-        {/* -----------------------------------------------
-            ADMIN ONLY - USERS
-            ----------------------------------------------- */}
-
-        {user?.role === "admin" && (
-
-          <NavLink
-            to="/users"
-            className={({ isActive }) =>
-              `nav-link ${
-                isActive ? "active" : ""
-              }`
-            }
-          >
-
-            <ShieldCheck
-              size={18}
-              aria-hidden="true"
-            />
-
-            <span>
-              Users
-            </span>
-
-          </NavLink>
-
-        )}
-
+          ))}
+        </div>
       </div>
 
+      <div className="nav-group nav-group-admin">
+        <div className="nav-group-label">Administration</div>
+
+        <div className="nav-items">
+          {adminLinks.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                `nav-item ${isActive ? "is-active" : ""}`
+              }
+            >
+              <Icon size={18} strokeWidth={2} />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </div>
+      </div>
     </nav>
   );
+}
 
+function AppShell() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  /* =======================================================
-     RENDER
-     ======================================================= */
+  const closeMobile = () => {
+    setMobileOpen(false);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/", { replace: true });
+  };
 
   return (
     <div className="app-shell">
-
-      {/* ==================================================
-          SKIP TO CONTENT
-          ================================================== */}
-
-      <a
-        className="skip-link"
-        href="#main-content"
-      >
+      <a className="skip-link" href="#main-content">
         Skip to content
       </a>
 
-
-      {/* ==================================================
+      {/* =========================
           DESKTOP SIDEBAR
-          ================================================== */}
-
-      <aside className="sidebar desktop-only">
-
-        {/* -----------------------------------------------
-            BRAND
-            ----------------------------------------------- */}
-
-        <div className="sidebar-brand">
-
-          <div className="brand-mark">
-            <FolderKanban size={22} />
+      ========================== */}
+      <aside className="desktop-sidebar">
+        <div className="sidebar-logo">
+          <div className="logo-symbol">
+            <BriefcaseBusiness size={19} />
           </div>
-
 
           <div>
-
-            <div className="brand-name">
-              CRM
-            </div>
-
-            <div className="brand-caption">
-              Customer management
-            </div>
-
+            <div className="logo-name">NexaCRM</div>
+            <div className="logo-caption">Customer operations</div>
           </div>
-
         </div>
 
-
-        {/* -----------------------------------------------
-            NAVIGATION
-            ----------------------------------------------- */}
-
-        <div className="sidebar-nav">
-          {renderNavigation()}
+        <div className="sidebar-content">
+          <NavItems />
         </div>
 
+        <div className="sidebar-bottom">
+          <div className="sidebar-user">
+            <div className="avatar">{initials(user?.name)}</div>
 
-        {/* -----------------------------------------------
-            USER / LOGOUT
-            ----------------------------------------------- */}
+            <div className="sidebar-user-copy">
+              <div className="sidebar-user-name">
+                {user?.name || "User"}
+              </div>
 
-        <div className="sidebar-footer">
+              <div className="sidebar-user-role">
+                {user?.role || "member"}
+              </div>
+            </div>
 
-          <UserSummary user={user} />
-
+            <ChevronDown size={15} />
+          </div>
 
           <button
             type="button"
-            className="btn btn-ghost logout-btn"
-            onClick={doLogout}
+            className="sidebar-logout"
+            onClick={handleLogout}
           >
-
-            <LogOut
-              size={17}
-              aria-hidden="true"
-            />
-
-            Log out
-
+            <LogOut size={16} />
+            Sign out
           </button>
-
         </div>
-
       </aside>
 
+      {/* =========================
+          MOBILE TOPBAR
+      ========================== */}
+      <div className="mobile-topbar">
+        <button
+          type="button"
+          className="mobile-menu-button"
+          onClick={() => setMobileOpen((value) => !value)}
+          aria-label={
+            mobileOpen ? "Close navigation" : "Open navigation"
+          }
+          aria-expanded={mobileOpen}
+        >
+          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
 
-      {/* ==================================================
-          MAIN CONTENT AREA
-          ================================================== */}
-
-      <div className="main">
-
-        {/* =================================================
-            MOBILE HEADER
-            ================================================= */}
-
-        <header className="mobile-header mobile-only">
-
-          <div className="mobile-brand">
-
-            <div className="brand-mark">
-              <FolderKanban size={18} />
-            </div>
-
-            <strong>
-              CRM
-            </strong>
-
+        <div className="mobile-brand">
+          <div className="logo-symbol">
+            <BriefcaseBusiness size={17} />
           </div>
 
+          <span>NexaCRM</span>
+        </div>
+
+        <button
+          type="button"
+          className="mobile-notification"
+          aria-label="Notifications"
+        >
+          <Bell size={19} />
+        </button>
+      </div>
+
+      {/* =========================
+          MOBILE DRAWER
+      ========================== */}
+      {mobileOpen && (
+        <div className="mobile-drawer">
+          <div className="mobile-drawer-user">
+            <div className="avatar">{initials(user?.name)}</div>
+
+            <div>
+              <div className="sidebar-user-name">
+                {user?.name || "User"}
+              </div>
+
+              <div className="sidebar-user-role">
+                {user?.role || "member"}
+              </div>
+            </div>
+          </div>
+
+          <NavItems onNavigate={closeMobile} />
 
           <button
             type="button"
-            className="icon-btn"
-            aria-label={
-              open
-                ? "Close navigation"
-                : "Open navigation"
-            }
-            aria-expanded={open}
-            aria-controls="mobile-navigation"
-            onClick={() =>
-              setOpen(
-                (value) => !value
-              )
-            }
+            className="sidebar-logout"
+            onClick={handleLogout}
           >
-
-            {open ? (
-              <X size={20} />
-            ) : (
-              <Menu size={20} />
-            )}
-
+            <LogOut size={16} />
+            Sign out
           </button>
+        </div>
+      )}
 
-        </header>
+      {/* =========================
+          MAIN APPLICATION
+      ========================== */}
+      <div className="app-main">
+        <header className="topbar">
+          <div className="topbar-search">
+            <Search size={17} />
 
+            <input
+              type="search"
+              aria-label="Global search"
+              placeholder="Search customers, cases..."
+            />
 
-        {/* =================================================
-            MOBILE NAVIGATION
-            ================================================= */}
-
-        {open && (
-
-          <div
-            id="mobile-navigation"
-            className="mobile-nav mobile-only"
-          >
-
-            {renderNavigation()}
-
-
-            {/* Mobile User */}
-
-            <div className="mobile-user">
-
-              <UserSummary
-                user={user}
-              />
-
-            </div>
-
-
-            {/* Mobile Logout */}
-
-            <button
-              type="button"
-              className="btn btn-ghost logout-btn"
-              onClick={doLogout}
-            >
-
-              <LogOut
-                size={17}
-                aria-hidden="true"
-              />
-
-              Log out
-
-            </button>
-
+            <kbd>⌘ K</kbd>
           </div>
 
-        )}
+          <div className="topbar-actions">
+            <button
+              type="button"
+              className="topbar-icon"
+              aria-label="Notifications"
+            >
+              <Bell size={18} />
+              <span className="notification-dot" />
+            </button>
 
+            <div className="topbar-divider" />
 
-        {/* =================================================
-            PAGE CONTENT
-            ================================================= */}
+            <div className="topbar-profile">
+              <div className="avatar avatar-small">
+                {initials(user?.name)}
+              </div>
 
-        <main
-          id="main-content"
-          tabIndex="-1"
-        >
+              <div>
+                <div className="profile-name">
+                  {user?.name || "User"}
+                </div>
+
+                <div className="profile-role">
+                  {user?.role || "member"}
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main id="main-content" className="main-content">
           <Outlet />
         </main>
-
       </div>
-
     </div>
   );
 }
 
-
-/* =========================================================
-   USER SUMMARY
-   ========================================================= */
-
-function UserSummary({ user }) {
-  const initial =
-    (user?.name || "U")
-      .charAt(0)
-      .toUpperCase();
-
-
-  return (
-    <div className="user-summary">
-
-      {/* Avatar */}
-
-      <div className="avatar">
-        {initial}
-      </div>
-
-
-      {/* User Details */}
-
-      <div className="item-main">
-
-        <div className="item-title">
-          {user?.name || "Signed in"}
-        </div>
-
-
-        <div className="item-meta">
-          {user?.email || ""}
-        </div>
-
-
-        {/* Role */}
-
-        {user?.role && (
-
-          <span className="role-pill">
-            {user.role}
-          </span>
-
-        )}
-
-      </div>
-
-    </div>
-  );
-}
+/*
+ * Both exports are intentional.
+ *
+ * Named import:
+ * import { AppShell } from "./components/layout/AppShell";
+ *
+ * Default import:
+ * import AppShell from "./components/layout/AppShell";
+ */
+export { AppShell };
+export default AppShell;

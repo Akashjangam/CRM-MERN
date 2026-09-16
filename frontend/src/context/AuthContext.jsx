@@ -1,224 +1,250 @@
-import {
+﻿import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
 
-import api from "../services/api";
-
-/* =========================================================
-   CREATE CONTEXT
-   ========================================================= */
+import api, { getErrorMessage } from "../services/api";
 
 const AuthContext = createContext(null);
 
-/* =========================================================
-   READ USER FROM LOCAL STORAGE
-   ========================================================= */
-
-function readUser() {
-  try {
-    const value = localStorage.getItem("user");
-
-    if (!value) {
-      return null;
-    }
-
-    return JSON.parse(value);
-  } catch (error) {
-    console.error("Failed to read user from localStorage:", error);
-
-    return null;
-  }
-}
-
-/* =========================================================
-   AUTH PROVIDER
-   ========================================================= */
+const TOKEN_KEY = "crm_token";
+const USER_KEY = "crm_user";
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem("token"));
+  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
 
-  const [user, setUser] = useState(readUser);
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem(USER_KEY);
 
-  /* =======================================================
-     PERSIST AUTH DATA
-     ======================================================= */
-
-  const persist = useCallback((nextToken, nextUser) => {
-    console.log("AUTH PERSIST:", {
-      hasToken: Boolean(nextToken),
-      user: nextUser,
-    });
-
-    /* -----------------------------
-         TOKEN
-      ----------------------------- */
-
-    if (nextToken) {
-      localStorage.setItem("token", nextToken);
-    } else {
-      localStorage.removeItem("token");
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      localStorage.removeItem(USER_KEY);
+      return null;
     }
+  });
 
-    /* -----------------------------
-         USER
-      ----------------------------- */
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-    if (nextUser) {
-      localStorage.setItem("user", JSON.stringify(nextUser));
-    } else {
-      localStorage.removeItem("user");
-    }
+  const saveSession = useCallback((newToken, newUser) => {
+    localStorage.setItem(TOKEN_KEY, newToken);
 
-    /* -----------------------------
-         REACT STATE
-      ----------------------------- */
+    localStorage.setItem(USER_KEY, JSON.stringify(newUser));
 
-    setToken(nextToken || null);
-    setUser(nextUser || null);
+    setToken(newToken);
+    setUser(newUser);
   }, []);
 
-  /* =======================================================
-     LOGIN
-     ======================================================= */
+  const clearSession = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
 
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  /*
+   * Restore and validate an existing session.
+   */
+  useEffect(() => {
+    let mounted = true;
+
+    async function restoreSession() {
+      const savedToken = localStorage.getItem(TOKEN_KEY);
+
+      if (!savedToken) {
+        if (mounted) {
+          setLoading(false);
+        }
+
+        return;
+      }
+
+      try {
+        const response = await api.get("/auth/me");
+
+        const currentUser = response.data?.user;
+
+        if (!currentUser) {
+          throw new Error("Invalid user session.");
+        }
+
+        if (mounted) {
+          setToken(savedToken);
+          setUser(currentUser);
+
+          localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
+        }
+      } catch (err) {
+        if (mounted) {
+          clearSession();
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    restoreSession();
+
+    return () => {
+      mounted = false;
+    };
+  }, [clearSession]);
+
+  /*
+   * LOGIN
+   */
   const login = useCallback(
     async (credentials) => {
+      setLoading(true);
+      setError("");
+
       try {
-        console.log("LOGIN REQUEST:", credentials.email);
+        const email = String(credentials?.email || "")
+          .trim()
+          .toLowerCase();
 
-        const { data } = await api.post("/auth/login", credentials);
+        const password = String(credentials?.password || "");
 
-        console.log("LOGIN RESPONSE:", data);
-
-        /* --------------------------------
-           Validate login response
-        -------------------------------- */
-
-        if (!data?.token) {
-          throw new Error(
-            "Login succeeded but JWT token was not returned by the server.",
-          );
+        if (!email || !password) {
+          throw new Error("Email and password are required.");
         }
 
-        if (!data?.user) {
-          throw new Error(
-            "Login succeeded but user information was not returned by the server.",
-          );
+        const response = await api.post("/auth/login", {
+          email,
+          password,
+        });
+
+        const responseData = response.data || {};
+
+        const newToken = responseData.token;
+
+        const newUser = responseData.user;
+
+        if (!newToken || !newUser) {
+          throw new Error("Login response is invalid.");
         }
 
-        /* --------------------------------
-           Save token + user
-        -------------------------------- */
+        saveSession(newToken, newUser);
 
-        persist(data.token, data.user);
+        return responseData;
+      } catch (err) {
+        const message = getErrorMessage(
+          err,
+          "Login failed. Please check your email and password.",
+        );
 
-        /* --------------------------------
-           Verify storage
-        -------------------------------- */
-
-        console.log("TOKEN SAVED:", Boolean(localStorage.getItem("token")));
-
-        console.log("USER SAVED:", localStorage.getItem("user"));
-
-        return data;
-      } catch (error) {
-        console.error("LOGIN ERROR:", error);
-
-        throw error;
+        setError(message);
+        throw err;
+      } finally {
+        setLoading(false);
       }
     },
-    [persist],
+    [saveSession],
   );
 
-  /* =======================================================
-     REGISTER
-     ======================================================= */
-
+  /*
+   * REGISTER
+   */
   const register = useCallback(
-    async (payload) => {
+    async (details) => {
+      setLoading(true);
+      setError("");
+
       try {
-        console.log("REGISTER REQUEST:", payload);
+        const name = String(details?.name || "").trim();
 
-        const { data } = await api.post("/auth/register", payload);
+        const email = String(details?.email || "")
+          .trim()
+          .toLowerCase();
 
-        console.log("REGISTER RESPONSE:", data);
+        const password = String(details?.password || "");
+
+        if (!name || !email || !password) {
+          throw new Error("Name, email, and password are required.");
+        }
+
+        if (password.length < 6) {
+          throw new Error("Password must be at least 6 characters.");
+        }
+
+        const response = await api.post("/auth/register", {
+          name,
+          email,
+          password,
+        });
+
+        const responseData = response.data || {};
+
+        const newToken = responseData.token;
+
+        const newUser = responseData.user;
+
+        if (!newToken || !newUser) {
+          throw new Error("Registration response is invalid.");
+        }
 
         /*
-         * If backend automatically logs the user in
-         * after registration, save the JWT.
+         * Registration automatically logs
+         * the newly created user in.
          */
+        saveSession(newToken, newUser);
 
-        if (data?.token && data?.user) {
-          persist(data.token, data.user);
+        return responseData;
+      } catch (err) {
+        const message = getErrorMessage(err, "Registration failed.");
 
-          console.log(
-            "REGISTER TOKEN SAVED:",
-            Boolean(localStorage.getItem("token")),
-          );
-        }
-
-        return data;
-      } catch (error) {
-        console.error("REGISTER ERROR:", error);
-
-        throw error;
+        setError(message);
+        throw err;
+      } finally {
+        setLoading(false);
       }
     },
-    [persist],
+    [saveSession],
   );
 
-  /* =======================================================
-     LOGOUT
-     ======================================================= */
-
+  /*
+   * LOGOUT
+   */
   const logout = useCallback(() => {
-    console.log("LOGOUT");
-
-    persist(null, null);
-  }, [persist]);
-
-  /* =======================================================
-     AUTH CONTEXT VALUE
-     ======================================================= */
+    clearSession();
+    setError("");
+  }, [clearSession]);
 
   const value = useMemo(
     () => ({
       token,
-
       user,
-
-      isAuthenticated: Boolean(token),
-
+      loading,
+      error,
+      isAuthenticated: Boolean(token && user),
       login,
-
       register,
-
       logout,
+      clearError: () => setError(""),
     }),
-    [token, user, login, register, logout],
+    [token, user, loading, error, login, register, logout],
   );
-
-  /* =======================================================
-     PROVIDER
-     ======================================================= */
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-/* =========================================================
-   USE AUTH HOOK
-   ========================================================= */
-
 export function useAuth() {
-  const value = useContext(AuthContext);
+  const context = useContext(AuthContext);
 
-  if (!value) {
-    throw new Error("useAuth must be used within AuthProvider");
+  if (!context) {
+    throw new Error("useAuth must be used inside AuthProvider.");
   }
 
-  return value;
+  return context;
 }
+
+export default AuthContext;
+

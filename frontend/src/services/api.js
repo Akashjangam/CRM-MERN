@@ -1,105 +1,99 @@
-import axios from "axios";
+﻿import axios from "axios";
 
-const defaultApiUrl =
-  import.meta.env.VITE_API_URL ||
-  (window.location.hostname === "localhost"
-    ? "http://localhost:5000/api"
-    : "https://crm-mern-it4g.onrender.com/api");
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const api = axios.create({
-  baseURL: defaultApiUrl,
-
-  timeout: 15000,
-
+  baseURL: API_URL,
+  timeout: 30000,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-/* =========================================================
-   ATTACH JWT TOKEN TO EVERY REQUEST
-   ========================================================= */
-
+/*
+ * Attach JWT token to every protected request.
+ */
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
-
-    console.log("API REQUEST:", config.method?.toUpperCase(), config.url);
-
-    console.log("API BASE URL:", config.baseURL);
-
-    console.log("JWT TOKEN EXISTS:", Boolean(token));
+    const token = localStorage.getItem("crm_token");
 
     if (token) {
-      config.headers = config.headers || {};
-
       config.headers.Authorization = `Bearer ${token}`;
-
-      console.log("AUTH HEADER ATTACHED: true");
-    } else {
-      console.warn("AUTH HEADER ATTACHED: false - JWT token is missing");
     }
 
     return config;
   },
-  (error) => {
-    console.error("REQUEST INTERCEPTOR ERROR:", error);
-
-    return Promise.reject(error);
-  },
+  (error) => Promise.reject(error),
 );
 
-/* =========================================================
-   HANDLE API RESPONSE
-   ========================================================= */
-
+/*
+ * Handle authentication failures globally.
+ */
 api.interceptors.response.use(
-  (response) => {
-    console.log("API RESPONSE:", response.status, response.config?.url);
-
-    return response;
-  },
+  (response) => response,
 
   (error) => {
-    console.error(
-      "API ERROR:",
-      error.response?.status,
-      error.response?.data,
-      error.config?.url,
-    );
+    if (error.response?.status === 401) {
+      const requestUrl = error.config?.url || "";
 
-    /*
-     * IMPORTANT:
-     * Only logout automatically for 401.
-     *
-     * 403 = permission/role problem
-     * 404 = route/resource problem
-     *
-     * Do not remove the token for those.
-     */
-
-    if (
-      error.response?.status === 401 &&
-      !["/", "/register"].includes(window.location.pathname)
-    ) {
-      console.warn("401 Unauthorized - clearing authentication");
-
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-
-      window.location.assign("/");
+      /*
+       * Do not immediately clear the session
+       * for /auth/me during initial validation.
+       * AuthContext handles that.
+       */
+      if (!requestUrl.includes("/auth/me")) {
+        localStorage.removeItem("crm_token");
+        localStorage.removeItem("crm_user");
+      }
     }
 
     return Promise.reject(error);
   },
 );
 
-/* =========================================================
-   ERROR MESSAGE HELPER
-   ========================================================= */
-
+/*
+ * Convert backend/API errors into a clean message.
+ */
 export function getErrorMessage(error, fallback = "Something went wrong.") {
-  return error?.response?.data?.message || error?.message || fallback;
+  if (!error) {
+    return fallback;
+  }
+
+  /*
+   * Backend response:
+   * {
+   *   success: false,
+   *   message: "..."
+   * }
+   */
+  const serverMessage = error.response?.data?.message;
+
+  if (typeof serverMessage === "string" && serverMessage.trim()) {
+    return serverMessage;
+  }
+
+  /*
+   * Validation errors.
+   */
+  const validationErrors = error.response?.data?.errors;
+
+  if (Array.isArray(validationErrors)) {
+    return validationErrors
+      .map((item) => (typeof item === "string" ? item : item?.message))
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  if (error.code === "ECONNABORTED") {
+    return "Request timed out. Please try again.";
+  }
+
+  if (!error.response) {
+    return "Unable to connect to the server.";
+  }
+
+  return error.message || fallback;
 }
 
 export default api;
+

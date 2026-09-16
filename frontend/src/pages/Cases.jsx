@@ -1,29 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-
-import { FolderKanban, Pencil, Plus, Search, Trash2 } from "lucide-react";
+﻿import { useEffect, useMemo, useState } from "react";
+import { BriefcaseBusiness, Pencil, Plus, Search, Trash2 } from "lucide-react";
 
 import api, { getErrorMessage } from "../services/api";
-
 import { Button } from "../components/ui/Button";
-
-import { Select, TextArea, TextInput } from "../components/ui/Field";
-
+import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import {
-  Banner,
   EmptyState,
   ErrorState,
   SkeletonRows,
 } from "../components/ui/Feedback";
-
+import { Select, TextArea, TextInput } from "../components/ui/Field";
 import { StatusBadge } from "../components/ui/StatusBadge";
-
-import { ConfirmDialog } from "../components/ui/ConfirmDialog";
-
 import { useAuth } from "../context/AuthContext";
-
-/* =========================================================
-   INITIAL FORM
-   ========================================================= */
 
 const blank = {
   customer: "",
@@ -31,819 +19,666 @@ const blank = {
   description: "",
   priority: "Medium",
   status: "Open",
-  assignedTo: "",
 };
 
-/* =========================================================
-   CASES PAGE
-   ========================================================= */
+const CASE_STATUSES = ["Open", "In Progress", "Resolved", "Closed"];
+
+const CASE_PRIORITIES = ["Low", "Medium", "High", "Urgent"];
+
+function customerName(value) {
+  if (!value) return "Unknown customer";
+
+  if (typeof value === "object") {
+    return value?.name || "Unknown customer";
+  }
+
+  return "Unknown customer";
+}
+
+function customerId(value) {
+  if (!value) return "";
+
+  if (typeof value === "object") {
+    return value?._id || value?.id || "";
+  }
+
+  return String(value);
+}
+
+function getCaseId(item) {
+  return item?._id || item?.id || "";
+}
 
 export default function Cases() {
   const { user } = useAuth();
 
-  /* =======================================================
-     STATE
-     ======================================================= */
-
-  const [items, setItems] = useState([]);
-
-  const [customers, setCustomers] = useState([]);
-
-  const [agents, setAgents] = useState([]);
-
-  const [form, setForm] = useState(blank);
-
-  const [edit, setEdit] = useState(null);
-
-  const [query, setQuery] = useState("");
-
-  const [status, setStatus] = useState("All");
-
-  const [loading, setLoading] = useState(true);
-
-  const [error, setError] = useState("");
-
-  const [formError, setFormError] = useState("");
-
-  const [saving, setSaving] = useState(false);
-
-  const [open, setOpen] = useState(false);
-
-  const [remove, setRemove] = useState(null);
-
-  /* =======================================================
-     USER ROLE
-     ======================================================= */
-
-  const role = user?.role || "";
-
-  const isAdmin = role === "admin";
-
-  const isAgent = role === "agent";
+  const role = String(user?.role || "")
+    .trim()
+    .toLowerCase();
 
   const isCustomer = role === "customer";
+  const isAdmin = role === "admin";
+  const isAgent = role === "agent";
 
-  const canCreate = ["admin", "agent", "customer"].includes(role);
+  const canCreate = isCustomer || isAdmin || isAgent;
+  const canEdit = isCustomer || isAdmin || isAgent;
+  const canDelete = isAdmin || isAgent;
 
-  const canEdit = ["admin", "agent", "customer"].includes(role);
+  const [cases, setCases] = useState([]);
+  const [customers, setCustomers] = useState([]);
 
-  const canDelete = ["admin", "agent"].includes(role);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("all");
+  const [priority, setPriority] = useState("all");
 
-  const summaryStats = useMemo(() => {
-    const openCount = items.filter((item) => item.status === "Open").length;
-    const inProgressCount = items.filter((item) => item.status === "In Progress").length;
-    const highPriorityCount = items.filter((item) => item.priority === "High").length;
+  const [form, setForm] = useState(blank);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
-    return [
-      {
-        label: "Visible cases",
-        value: items.length,
-        trend: `${openCount} open`,
-      },
-      {
-        label: "In progress",
-        value: inProgressCount,
-        trend: `${highPriorityCount} high priority`,
-      },
-      {
-        label: "Assigned",
-        value: items.filter((item) => item.assignedTo?.name).length,
-        trend: `${items.filter((item) => !item.assignedTo?.name).length} unassigned`,
-      },
-    ];
-  }, [items]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  /* =======================================================
-     LOAD CASES
-     ======================================================= */
+  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
 
-  const loadCases = async () => {
+  const load = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const response = await api.get("/cases");
+      /*
+       * Customers are loaded because:
+       * - admin/agent need the customer list
+       * - customer receives their own linked profile
+       */
+      const [casesRes, customerRes] = await Promise.all([
+        api.get("/cases"),
+        api.get("/customers"),
+      ]);
 
-      setItems(response.data?.data || []);
-    } catch (error) {
-      setError(getErrorMessage(error, "Could not load cases."));
+      /*
+       * Backend response:
+       *
+       * /cases
+       * {
+       *   success: true,
+       *   count: 0,
+       *   cases: []
+       * }
+       *
+       * /customers
+       * {
+       *   success: true,
+       *   count: 1,
+       *   customers: []
+       * }
+       */
+      const caseList = casesRes.data?.cases || casesRes.data?.data || [];
+
+      const customerList =
+        customerRes.data?.customers || customerRes.data?.data || [];
+
+      setCases(Array.isArray(caseList) ? caseList : []);
+      setCustomers(Array.isArray(customerList) ? customerList : []);
+    } catch (err) {
+      setError(getErrorMessage(err, "Could not load cases."));
     } finally {
       setLoading(false);
     }
   };
 
-  /* =======================================================
-     LOAD CUSTOMERS
-     ======================================================= */
-
-  const loadCustomers = async () => {
-    /*
-     * Customers don't need the customer list.
-     * Admins and agents can select customers.
-     */
-
-    if (isCustomer) {
-      return;
-    }
-
-    try {
-      const response = await api.get("/customers");
-
-      setCustomers(response.data?.data || []);
-    } catch (error) {
-      console.error("Could not load customers:", error);
-    }
-  };
-
-  /* =======================================================
-     LOAD AGENTS
-     ======================================================= */
-
-  const loadAgents = async () => {
-    /*
-     * Only admin and agents need
-     * assignment information.
-     */
-
-    if (!isAdmin && !isAgent) {
-      return;
-    }
-
-    try {
-      const response = await api.get("/cases/agents");
-
-      setAgents(response.data?.data || []);
-    } catch (error) {
-      console.error("Could not load agents:", error);
-    }
-  };
-
-  /* =======================================================
-     INITIAL LOAD
-     ======================================================= */
-
   useEffect(() => {
-    loadCases();
-    loadCustomers();
-    loadAgents();
-  }, [role]);
-
-  /* =======================================================
-     FILTER CASES
-     ======================================================= */
+    load();
+  }, []);
 
   const filtered = useMemo(() => {
-    const search = query.trim().toLowerCase();
+    const term = query.trim().toLowerCase();
 
-    return items.filter((item) => {
-      const matchesStatus = status === "All" || item.status === status;
-
-      const searchableText = [
+    return cases.filter((item) => {
+      const haystack = [
         item.title,
         item.description,
-        item.customer?.name,
-        item.assignedTo?.name,
+        customerName(item.customer),
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
 
-      const matchesSearch = !search || searchableText.includes(search);
+      const matchesSearch = !term || haystack.includes(term);
 
-      return matchesStatus && matchesSearch;
+      const matchesStatus =
+        status === "all" ||
+        String(item.status || "").toLowerCase() === status.toLowerCase();
+
+      const matchesPriority =
+        priority === "all" ||
+        String(item.priority || "").toLowerCase() === priority.toLowerCase();
+
+      return matchesSearch && matchesStatus && matchesPriority;
     });
-  }, [items, query, status]);
+  }, [cases, query, status, priority]);
 
-  /* =======================================================
-     UPDATE FORM FIELD
-     ======================================================= */
+  const create = () => {
+    setEditing(null);
 
-  const updateForm = (field, value) => {
-    setForm((previous) => ({
-      ...previous,
-      [field]: value,
-    }));
-  };
-
-  /* =======================================================
-     OPEN NEW CASE
-     ======================================================= */
-
-  const openNewCase = () => {
-    setEdit(null);
-
+    /*
+     * Admin/Agent:
+     * Select the first available customer.
+     *
+     * Customer:
+     * Backend automatically uses their own profile,
+     * so customer field does not need to be submitted.
+     */
     setForm({
       ...blank,
-
-      customer: isCustomer ? "" : customers[0]?._id || "",
-
-      assignedTo: "",
+      customer: isCustomer
+        ? customerId(customers[0])
+        : customerId(customers[0]),
     });
 
     setFormError("");
     setOpen(true);
   };
 
-  /* =======================================================
-     EDIT CASE
-     ======================================================= */
-
-  const editCase = (item) => {
-    setEdit(item._id);
+  const edit = (item) => {
+    setEditing(getCaseId(item));
 
     setForm({
-      customer: item.customer?._id || item.customer || "",
-
+      customer: customerId(item.customer),
       title: item.title || "",
-
       description: item.description || "",
-
-      priority: item.priority || "Medium",
-
-      status: item.status || "Open",
-
-      assignedTo: item.assignedTo?._id || item.assignedTo || "",
+      priority:
+        CASE_PRIORITIES.find(
+          (value) =>
+            value.toLowerCase() === String(item.priority || "").toLowerCase(),
+        ) || "Medium",
+      status:
+        CASE_STATUSES.find(
+          (value) =>
+            value.toLowerCase() === String(item.status || "").toLowerCase(),
+        ) || "Open",
     });
 
     setFormError("");
     setOpen(true);
   };
 
-  /* =======================================================
-     CLOSE FORM
-     ======================================================= */
-
-  const closeForm = () => {
-    if (saving) {
-      return;
-    }
+  const closeDrawer = () => {
+    if (saving) return;
 
     setOpen(false);
-    setEdit(null);
-    setForm(blank);
+    setEditing(null);
     setFormError("");
   };
 
-  /* =======================================================
-     SAVE CASE
-     ======================================================= */
-
-  const submit = async (event) => {
+  const save = async (event) => {
     event.preventDefault();
 
     setSaving(true);
     setFormError("");
 
     try {
-      /* ---------------------------------------------------
-         VALIDATION
-         --------------------------------------------------- */
+      const title = form.title.trim();
+      const description = form.description.trim();
 
-      if (!form.title.trim()) {
-        setFormError("Case title is required.");
-        return;
+      if (!title) {
+        throw new Error("Case title is required.");
       }
 
-      if (!form.description.trim()) {
-        setFormError("Case description is required.");
-        return;
+      if (!description) {
+        throw new Error("Case description is required.");
       }
 
       /*
-       * Admin and Agent need a customer.
+       * Customer:
+       * Do NOT send customer ownership changes.
        *
-       * Customer accounts are automatically
-       * connected to their own customer profile
-       * by the backend.
+       * Backend automatically attaches the case to the
+       * authenticated customer's profile.
        */
+      if (isCustomer) {
+        const customerForm = {
+          title,
+          description,
+          priority: form.priority,
+          status: form.status,
+        };
 
-      if (!isCustomer && !form.customer) {
-        setFormError("Please select a customer.");
-        return;
-      }
-
-      /* ---------------------------------------------------
-         BUILD PAYLOAD
-         --------------------------------------------------- */
-
-      const payload = {
-        title: form.title.trim(),
-
-        description: form.description.trim(),
-
-        priority: form.priority,
-
-        status: form.status,
-      };
-
-      /*
-       * Only send customer when admin/agent
-       * selected one.
-       */
-
-      if (!isCustomer && form.customer) {
-        payload.customer = form.customer;
-      }
-
-      /*
-       * Assignment
-       */
-
-      if ((isAdmin || isAgent) && form.assignedTo) {
-        payload.assignedTo = form.assignedTo;
-      }
-
-      /* ---------------------------------------------------
-         CREATE
-         --------------------------------------------------- */
-
-      if (!edit) {
-        await api.post("/cases", payload);
+        if (editing) {
+          await api.patch(`/cases/${editing}`, customerForm);
+        } else {
+          await api.post("/cases", customerForm);
+        }
       } else {
-        /* ---------------------------------------------------
-         UPDATE
-         --------------------------------------------------- */
-        await api.patch(`/cases/${edit}`, payload);
-      }
+        /*
+         * Admin / Agent:
+         * Customer must be explicitly selected.
+         */
+        if (!form.customer) {
+          throw new Error("Please select a customer.");
+        }
 
-      /* ---------------------------------------------------
-         SUCCESS
-         --------------------------------------------------- */
+        const staffForm = {
+          customer: form.customer,
+          title,
+          description,
+          priority: form.priority,
+          status: form.status,
+        };
+
+        if (editing) {
+          await api.patch(`/cases/${editing}`, staffForm);
+        } else {
+          await api.post("/cases", staffForm);
+        }
+      }
 
       setOpen(false);
-      setEdit(null);
+      setEditing(null);
       setForm(blank);
-      setFormError("");
 
-      await loadCases();
-    } catch (error) {
-      console.error("CASE SAVE ERROR:", error);
-
-      setFormError(getErrorMessage(error, "Could not save case."));
+      await load();
+    } catch (err) {
+      setFormError(getErrorMessage(err, "Could not save case."));
     } finally {
       setSaving(false);
     }
   };
 
-  /* =======================================================
-     DELETE CASE
-     ======================================================= */
-
-  const confirmDelete = async () => {
-    if (!remove?._id) {
-      return;
-    }
+  const remove = async () => {
+    if (!pendingDelete) return;
 
     try {
-      await api.delete(`/cases/${remove._id}`);
+      const id = getCaseId(pendingDelete);
 
-      setRemove(null);
+      await api.delete(`/cases/${id}`);
 
-      await loadCases();
-    } catch (error) {
-      setError(getErrorMessage(error, "Could not delete case."));
+      setPendingDelete(null);
 
-      setRemove(null);
+      await load();
+    } catch (err) {
+      setPendingDelete(null);
+
+      setError(getErrorMessage(err, "Could not delete case."));
     }
   };
 
-  /* =======================================================
-     RENDER
-     ======================================================= */
-
   return (
     <div className="page">
-      {/* ==================================================
-          HEADER
-          ================================================== */}
-
-      <header className="page-header">
+      {/* PAGE HEADER */}
+      <div className="page-header">
         <div>
+          <div className="eyebrow">Customer support</div>
+
           <h1 className="page-title">Cases</h1>
 
-          <p className="page-subtitle">
-            Create, prioritize, update, assign, and track customer support
-            cases.
+          <p className="page-description">
+            Prioritize, assign and track customer issues from open to
+            resolution.
           </p>
         </div>
 
-        {canCreate && (
-          <div className="actions">
+        <div className="page-actions">
+          <span className="record-count">
+            {filtered.length} {filtered.length === 1 ? "case" : "cases"}
+          </span>
+
+          {canCreate && (
             <Button
-              onClick={openNewCase}
-              disabled={!isCustomer && !customers.length}
+              onClick={create}
+              disabled={!isCustomer && customers.length === 0}
             >
-              <Plus size={17} />
+              <Plus size={16} />
               New case
             </Button>
-          </div>
-        )}
-      </header>
-
-      <div className="page-summary">
-        {summaryStats.map((stat) => (
-          <div key={stat.label} className="summary-card">
-            <div>
-              <div className="summary-label">{stat.label}</div>
-              <div className="summary-value">{stat.value}</div>
-              <div className="summary-trend">{stat.trend}</div>
-            </div>
-            <div className="brand-mark">
-              <FolderKanban size={18} />
-            </div>
-          </div>
-        ))}
+          )}
+        </div>
       </div>
 
-      {/* ==================================================
-          CUSTOMER WARNING
-          ================================================== */}
+      {/* ERROR */}
+      {error && <div className="page-alert">{error}</div>}
 
-      {!isCustomer && !customers.length && !loading && (
-        <div
-          className="banner banner-warning"
-          style={{
-            marginBottom: 18,
-          }}
-        >
-          Add a customer before opening a case.
-        </div>
-      )}
-
-      {/* ==================================================
-          FORM
-          ================================================== */}
-
-      {open && (
-        <div
-          className="card"
-          style={{
-            marginBottom: 18,
-          }}
-        >
-          <div className="card-header">
-            <strong>{edit ? "Update case" : "New case"}</strong>
-          </div>
-
-          <div className="card-body">
-            {formError && <Banner>{formError}</Banner>}
-
-            <form className="form-grid" onSubmit={submit}>
-              {/* ==========================================
-                  CUSTOMER
-                  ========================================== */}
-
-              {!isCustomer && (
-                <Select
-                  id="case-customer"
-                  label="Customer"
-                  value={form.customer}
-                  onChange={(event) =>
-                    updateForm("customer", event.target.value)
-                  }
-                  required
-                >
-                  <option value="">Select a customer</option>
-
-                  {customers.map((customer) => (
-                    <option key={customer._id} value={customer._id}>
-                      {customer.name}
-                    </option>
-                  ))}
-                </Select>
-              )}
-
-              {/* ==========================================
-                  TITLE
-                  ========================================== */}
-
-              <TextInput
-                id="case-title"
-                label="Title"
-                value={form.title}
-                onChange={(event) => updateForm("title", event.target.value)}
-                placeholder="Enter case title"
-                required
-              />
-
-              {/* ==========================================
-                  PRIORITY
-                  ========================================== */}
-
-              <Select
-                id="case-priority"
-                label="Priority"
-                value={form.priority}
-                onChange={(event) => updateForm("priority", event.target.value)}
-              >
-                <option value="Low">Low</option>
-
-                <option value="Medium">Medium</option>
-
-                <option value="High">High</option>
-
-                <option value="Urgent">Urgent</option>
-              </Select>
-
-              {/* ==========================================
-                  STATUS
-                  ========================================== */}
-
-              <Select
-                id="case-status"
-                label="Status"
-                value={form.status}
-                onChange={(event) => updateForm("status", event.target.value)}
-              >
-                <option value="Open">Open</option>
-
-                <option value="In Progress">In Progress</option>
-
-                <option value="Resolved">Resolved</option>
-
-                <option value="Closed">Closed</option>
-              </Select>
-
-              {/* ==========================================
-                  ASSIGNED AGENT
-                  ========================================== */}
-
-              {(isAdmin || isAgent) && (
-                <Select
-                  id="case-assignedTo"
-                  label="Assigned agent"
-                  value={form.assignedTo}
-                  onChange={(event) =>
-                    updateForm("assignedTo", event.target.value)
-                  }
-                >
-                  <option value="">Unassigned</option>
-
-                  {agents.map((agent) => (
-                    <option key={agent._id} value={agent._id}>
-                      {agent.name}
-                      {" — "}
-                      {agent.role}
-                    </option>
-                  ))}
-                </Select>
-              )}
-
-              {/* ==========================================
-                  DESCRIPTION
-                  ========================================== */}
-
-              <div className="form-full">
-                <TextArea
-                  id="case-description"
-                  label="Description"
-                  value={form.description}
-                  onChange={(event) =>
-                    updateForm("description", event.target.value)
-                  }
-                  placeholder="Describe the customer issue..."
-                  required
-                />
-              </div>
-
-              {/* ==========================================
-                  BUTTONS
-                  ========================================== */}
-
-              <div className="form-actions form-full">
-                <Button type="submit" disabled={saving}>
-                  {saving ? "Saving..." : edit ? "Save changes" : "Create case"}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={closeForm}
-                  disabled={saving}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ==================================================
-          CASE LIST
-          ================================================== */}
-
-      <section className="card">
-        {/* =================================================
-            TOOLBAR
-            ================================================= */}
-
-        <div className="toolbar">
-          <div className="search-wrap">
-            <Search size={17} />
+      {/* MAIN PANEL */}
+      <section className="panel data-panel">
+        {/* TOOLBAR */}
+        <div className="toolbar toolbar-wrap">
+          <label className="search-control">
+            <Search size={16} />
 
             <input
-              className="search-input"
-              aria-label="Search cases"
-              placeholder="Search title, description, or customer"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search cases..."
+              aria-label="Search cases"
             />
-          </div>
+          </label>
 
-          <div className="toolbar-meta">
-            <span>{filtered.length} shown</span>
-          </div>
-
-          <div style={{ minWidth: 180 }}>
+          <div className="toolbar-filters">
             <Select
-              id="status-filter"
-              label="Filter by status"
+              id="case-status"
+              label="Status"
               value={status}
-              onChange={(event) => setStatus(event.target.value)}
+              onChange={(e) => setStatus(e.target.value)}
             >
-              <option value="All">All</option>
+              <option value="all">All statuses</option>
 
-              <option value="Open">Open</option>
+              {CASE_STATUSES.map((item) => (
+                <option key={item} value={item.toLowerCase()}>
+                  {item}
+                </option>
+              ))}
+            </Select>
 
-              <option value="In Progress">In Progress</option>
+            <Select
+              id="case-priority"
+              label="Priority"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+            >
+              <option value="all">All priorities</option>
 
-              <option value="Resolved">Resolved</option>
-
-              <option value="Closed">Closed</option>
+              {CASE_PRIORITIES.map((item) => (
+                <option key={item} value={item.toLowerCase()}>
+                  {item}
+                </option>
+              ))}
             </Select>
           </div>
         </div>
 
-        {/* =================================================
-            LOADING
-            ================================================= */}
-
-        {loading && <SkeletonRows />}
-
-        {/* =================================================
-            ERROR
-            ================================================= */}
-
-        {!loading && error && (
-          <ErrorState message={error} onRetry={loadCases} />
+        {/* CUSTOMER ONLY INFORMATION */}
+        {isCustomer && !loading && (
+          <div className="inline-info">
+            Your cases are linked automatically to your customer profile.
+          </div>
         )}
 
-        {/* =================================================
-            EMPTY
-            ================================================= */}
+        {/* STAFF WARNING */}
+        {!isCustomer && !customers.length && !loading && (
+          <div className="inline-warning">
+            Add a customer before creating a case.
+          </div>
+        )}
 
-        {!loading && !error && filtered.length === 0 && (
+        {/* LOADING */}
+        {loading ? (
+          <SkeletonRows count={7} />
+        ) : filtered.length === 0 ? (
           <EmptyState
-            icon={FolderKanban}
+            icon={BriefcaseBusiness}
             title={
-              query || status !== "All" ? "No matching cases" : "No cases yet"
+              query || status !== "all" || priority !== "all"
+                ? "No matching cases"
+                : "No cases yet"
             }
             description={
-              query || status !== "All"
-                ? "Try changing your search or status filter."
-                : "Create a case to track customer support work."
+              isCustomer
+                ? "Create a case to report an issue or request support."
+                : "Cases give your team a clear record of customer issues and follow-up work."
             }
             action={
-              canCreate && (isCustomer || customers.length > 0) ? (
-                <Button onClick={openNewCase}>
+              !query &&
+              status === "all" &&
+              priority === "all" &&
+              canCreate &&
+              (isCustomer || customers.length > 0) ? (
+                <Button onClick={create}>
                   <Plus size={15} />
                   New case
                 </Button>
               ) : null
             }
           />
-        )}
+        ) : (
+          /* CASE LIST */
+          <div className="case-table-list">
+            {filtered.map((item) => {
+              const id = getCaseId(item);
 
-        {/* =================================================
-            TABLE
-            ================================================= */}
+              return (
+                <article className="case-card" key={id}>
+                  <div className="case-card-main">
+                    <div className="case-card-heading">
+                      <span className="case-id">
+                        CASE-
+                        {String(id).slice(-6).toUpperCase()}
+                      </span>
 
-        {!loading && !error && filtered.length > 0 && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Case</th>
-
-                  <th>Customer</th>
-
-                  <th>Assigned to</th>
-
-                  <th>Priority</th>
-
-                  <th>Status</th>
-
-                  <th>Created</th>
-
-                  <th>Actions</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {filtered.map((item) => (
-                  <tr key={item._id}>
-                    {/* Case */}
-
-                    <td>
-                      <div className="table-leading">
-                        <span className="text-strong">{item.title}</span>
-                        <span className="item-meta">{item.description}</span>
-                      </div>
-                    </td>
-
-                    {/* Customer */}
-
-                    <td>{item.customer?.name || "Unknown"}</td>
-
-                    {/* Assigned */}
-
-                    <td>
-                      {item.assignedTo?.name ? (
-                        <div className="table-leading">
-                          <span className="text-strong">{item.assignedTo.name}</span>
-                          <span className="item-meta">{item.assignedTo.role}</span>
-                        </div>
-                      ) : (
-                        <span className="table-tag table-tag-muted">Unassigned</span>
-                      )}
-                    </td>
-
-                    {/* Priority */}
-
-                    <td>
-                      <StatusBadge value={item.priority} />
-                    </td>
-
-                    {/* Status */}
-
-                    <td>
                       <StatusBadge value={item.status} />
-                    </td>
+                    </div>
 
-                    {/* Created */}
+                    <h2>{item.title}</h2>
 
-                    <td>
-                      {item.createdAt
-                        ? new Date(item.createdAt).toLocaleDateString()
-                        : "—"}
-                    </td>
+                    <p>{item.description || "No description provided."}</p>
 
-                    {/* Actions */}
+                    <div className="case-card-meta">
+                      <span>{customerName(item.customer)}</span>
 
-                    <td>
-                      <div className="table-actions">
-                        {/* Edit */}
+                      <span>·</span>
 
-                        {canEdit && (
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            aria-label={`Edit ${item.title}`}
-                            onClick={() => editCase(item)}
-                          >
-                            <Pencil size={16} />
-                          </button>
-                        )}
+                      <span>
+                        Created{" "}
+                        {item.createdAt
+                          ? new Date(item.createdAt).toLocaleDateString()
+                          : "—"}
+                      </span>
+                    </div>
+                  </div>
 
-                        {/* Delete */}
+                  <div className="case-card-side">
+                    <StatusBadge value={item.priority} />
 
-                        {canDelete && (
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            aria-label={`Delete ${item.title}`}
-                            onClick={() => setRemove(item)}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    <div className="row-actions">
+                      {canEdit && (
+                        <button
+                          className="icon-button"
+                          onClick={() => edit(item)}
+                          aria-label={`Edit ${item.title}`}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                      )}
+
+                      {canDelete && (
+                        <button
+                          className="icon-button danger-icon"
+                          onClick={() => setPendingDelete(item)}
+                          aria-label={`Delete ${item.title}`}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
 
-      {/* ==================================================
-          DELETE CONFIRMATION
-          ================================================== */}
+      {/* CREATE / EDIT DRAWER */}
+      {open && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeDrawer();
+            }
+          }}
+        >
+          <div
+            className="drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="case-drawer-title"
+          >
+            <div className="drawer-header">
+              <div>
+                <div className="eyebrow">
+                  {editing ? "Update case" : "New case"}
+                </div>
 
+                <h2 id="case-drawer-title">
+                  {editing ? "Edit case" : "Create a case"}
+                </h2>
+              </div>
+
+              <button
+                className="icon-button"
+                onClick={closeDrawer}
+                aria-label="Close"
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+
+            <form className="drawer-body" onSubmit={save}>
+              {formError && <div className="form-error">{formError}</div>}
+
+              {/* CUSTOMER SELECT ONLY FOR STAFF */}
+              {!isCustomer && (
+                <Select
+                  id="case-customer"
+                  label="Customer"
+                  value={form.customer}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      customer: e.target.value,
+                    })
+                  }
+                  required
+                >
+                  <option value="">Select customer</option>
+
+                  {customers.map((customer) => (
+                    <option
+                      key={customer._id || customer.id}
+                      value={customer._id || customer.id}
+                    >
+                      {customer.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+
+              {/* CUSTOMER CONTEXT */}
+              {isCustomer && (
+                <div className="inline-info">
+                  This case will automatically be linked to your customer
+                  account.
+                </div>
+              )}
+
+              <TextInput
+                id="case-title"
+                label="Case title"
+                value={form.title}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    title: e.target.value,
+                  })
+                }
+                placeholder="Unable to access account"
+                required
+              />
+
+              <TextArea
+                id="case-description"
+                label="Description"
+                value={form.description}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    description: e.target.value,
+                  })
+                }
+                placeholder="Describe the issue and relevant context..."
+                required
+              />
+
+              <div className="form-two">
+                <Select
+                  id="case-priority-form"
+                  label="Priority"
+                  value={form.priority}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      priority: e.target.value,
+                    })
+                  }
+                >
+                  {CASE_PRIORITIES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </Select>
+
+                <Select
+                  id="case-status-form"
+                  label="Status"
+                  value={form.status}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      status: e.target.value,
+                    })
+                  }
+                >
+                  {CASE_STATUSES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="drawer-actions">
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={closeDrawer}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="button button-primary"
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Saving..."
+                    : editing
+                      ? "Save changes"
+                      : "Create case"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION */}
       <ConfirmDialog
-        open={Boolean(remove)}
-        title="Delete case"
+        open={Boolean(pendingDelete)}
+        title="Delete case?"
         message={
-          remove
-            ? `Delete “${remove.title}”? This action cannot be undone.`
+          pendingDelete
+            ? `This will permanently remove "${pendingDelete.title}".`
             : ""
         }
-        confirmLabel="Delete"
+        confirmLabel="Delete case"
         danger
-        onCancel={() => setRemove(null)}
-        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={remove}
       />
     </div>
   );

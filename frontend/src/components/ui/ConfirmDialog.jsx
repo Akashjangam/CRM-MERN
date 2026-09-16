@@ -1,22 +1,6 @@
-export function ConfirmDialog({ open, title, message, confirmLabel = "Confirm", danger = false, onCancel, onConfirm }) {
+﻿export function ConfirmDialog({ open, title, message, confirmLabel = "Confirm", danger = false, onCancel, onConfirm }) {
   if (!open) return null;
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-        <div className="modal-header">
-          <div>
-            <h2 className="modal-title" id="confirm-title">{title}</h2>
-            <p className="page-subtitle">{message}</p>
-          </div>
-          <button className="icon-btn" onClick={onCancel} aria-label="Close">×</button>
-        </div>
-        <div className="modal-body">
-          <div className="form-actions">
-            <button className={`btn ${danger ? "btn-danger" : "btn-primary"}`} onClick={onConfirm}>{confirmLabel}</button>
-            <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}><div className="confirm-dialog" role="dialog" aria-modal="true"><div className="confirm-content"><div className={`confirm-icon ${danger ? "confirm-danger" : ""}`}>!</div><div><h2>{title}</h2><p>{message}</p></div></div><div className="confirm-actions"><button className="button button-secondary" onClick={onCancel}>Cancel</button><button className={`button ${danger ? "button-danger" : "button-primary"}`} onClick={onConfirm}>{confirmLabel}</button></div></div></div>;
 }
+export default ConfirmDialog;
+

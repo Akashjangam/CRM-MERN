@@ -1,19 +1,30 @@
 import express from "express";
 
+import {
+  getUsers,
+  updateUserRole,
+} from "../controllers/userController.js";
+
 import authMiddleware from "../middleware/authMiddleware.js";
 import authorize from "../middleware/authorize.js";
 
-import { getUsers, updateUserRole } from "../controllers/userController.js";
-
 const router = express.Router();
 
-// Authentication required for all user routes
+/*
+ * All user-management routes require authentication
+ * and admin privileges.
+ */
 router.use(authMiddleware);
+router.use(authorize("admin"));
 
-// Only Admin can view all users
-router.get("/", authorize("admin"), getUsers);
+/*
+ * GET /api/users
+ */
+router.get("/", getUsers);
 
-// Only Admin can change a user's role
-router.patch("/:id/role", authorize("admin"), updateUserRole);
+/*
+ * PATCH /api/users/:id/role
+ */
+router.patch("/:id/role", updateUserRole);
 
 export default router;

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
+  MoreHorizontal,
   Pencil,
   Plus,
   Search,
@@ -8,778 +9,757 @@ import {
 } from "lucide-react";
 
 import api, { getErrorMessage } from "../services/api";
-
 import { Button } from "../components/ui/Button";
-import { TextInput } from "../components/ui/Field";
-
-import {
-  Banner,
-  EmptyState,
-  ErrorState,
-  SkeletonRows,
-} from "../components/ui/Feedback";
-
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 
+import { EmptyState, SkeletonRows } from "../components/ui/Feedback";
+
+import { Select, TextInput } from "../components/ui/Field";
+import { StatusBadge } from "../components/ui/StatusBadge";
 import { useAuth } from "../context/AuthContext";
 
-
-/* =========================================================
-   INITIAL FORM
-   ========================================================= */
-
-const initialForm = {
+const blank = {
   name: "",
   email: "",
   phone: "",
   company: "",
+  status: "active",
 };
 
-
-/* =========================================================
-   CUSTOMERS PAGE
-   ========================================================= */
+function initials(name = "Customer") {
+  return (
+    name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase())
+      .join("") || "C"
+  );
+}
 
 export default function Customers() {
   const { user } = useAuth();
 
-  /* =======================================================
-     STATE
-     ======================================================= */
+  /*
+   * Normalize authenticated user's role.
+   */
+  const role = String(user?.role || "")
+    .trim()
+    .toLowerCase();
 
-  const [items, setItems] = useState([]);
+  /*
+   * Permissions
+   *
+   * admin:
+   *   create + edit + delete
+   *
+   * agent:
+   *   create + edit
+   *
+   * customer:
+   *   view only
+   */
+  const canCreate = role === "admin" || role === "agent";
+  const canEdit = role === "admin" || role === "agent";
+  const canDelete = role === "admin";
 
-  const [form, setForm] = useState(initialForm);
+  const [customers, setCustomers] = useState([]);
 
-  const [edit, setEdit] = useState(null);
+  const [form, setForm] = useState(blank);
 
   const [query, setQuery] = useState("");
 
+  const [status, setStatus] = useState("all");
+
+  const [open, setOpen] = useState(false);
+
+  const [editing, setEditing] = useState(null);
+
+  const [pendingDelete, setPendingDelete] = useState(null);
+
   const [loading, setLoading] = useState(true);
+
+  const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState("");
 
   const [formError, setFormError] = useState("");
 
-  const [saving, setSaving] = useState(false);
-
-  const [remove, setRemove] = useState(null);
-
-  const [open, setOpen] = useState(false);
-
-
-  /* =======================================================
-     ROLE PERMISSIONS
-     ======================================================= */
-
-  const role = user?.role || "";
-
-  const canCreate =
-    ["admin", "agent"].includes(role);
-
-  const canEdit =
-    ["admin", "agent"].includes(role);
-
-  const canDelete =
-    role === "admin";
-
-  const summaryStats = useMemo(() => [
-    {
-      label: "Customers",
-      value: items.length,
-      trend: `${filtered.length} matching`,
-    },
-    {
-      label: "Companies",
-      value: new Set(items.map((item) => item.company).filter(Boolean)).size,
-      trend: "Tracked records",
-    },
-    {
-      label: "Contact coverage",
-      value: `${Math.round((items.filter((item) => item.email || item.phone).length / Math.max(items.length, 1)) * 100)}%`,
-      trend: "with email or phone",
-    },
-  ], [filtered.length, items]);
-
-
-  /* =======================================================
-     LOAD CUSTOMERS
-     ======================================================= */
-
+  /*
+   * Load customers.
+   */
   const load = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const response =
-        await api.get("/customers");
+      const response = await api.get("/customers");
 
-      setItems(
-        response.data?.data || []
-      );
-    } catch (error) {
-      setError(
-        getErrorMessage(
-          error,
-          "Could not load customers."
-        )
-      );
+      /*
+       * Backend response:
+       *
+       * {
+       *   success: true,
+       *   count: number,
+       *   customers: []
+       * }
+       *
+       * The fallback supports an older response shape.
+       */
+      const customerData =
+        response.data?.customers || response.data?.data || [];
+
+      setCustomers(Array.isArray(customerData) ? customerData : []);
+    } catch (err) {
+      setError(getErrorMessage(err, "Could not load customers."));
     } finally {
       setLoading(false);
     }
   };
 
-
-  /* =======================================================
-     INITIAL LOAD
-     ======================================================= */
-
   useEffect(() => {
     load();
   }, []);
 
-
-  /* =======================================================
-     FILTER CUSTOMERS
-     ======================================================= */
-
+  /*
+   * Search + status filtering.
+   */
   const filtered = useMemo(() => {
-    const search =
-      query.trim().toLowerCase();
+    const term = query.trim().toLowerCase();
 
-    if (!search) {
-      return items;
-    }
+    return customers.filter((item) => {
+      const matchesStatus =
+        status === "all" ||
+        String(item.status || "active").toLowerCase() === status;
 
-    return items.filter((customer) => {
-      const searchableText = [
-        customer.name,
-        customer.email,
-        customer.phone,
-        customer.company,
-      ]
+      const haystack = [item.name, item.email, item.phone, item.company]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
 
-      return searchableText.includes(search);
+      return matchesStatus && (!term || haystack.includes(term));
     });
-  }, [items, query]);
+  }, [customers, query, status]);
 
-
-  /* =======================================================
-     OPEN NEW CUSTOMER FORM
-     ======================================================= */
-
-  const openNewCustomer = () => {
-    setEdit(null);
-
-    setForm({
-      ...initialForm,
-    });
-
-    setFormError("");
-    setOpen(true);
-  };
-
-
-  /* =======================================================
-     OPEN EDIT FORM
-     ======================================================= */
-
-  const editCustomer = (customer) => {
-    setEdit(customer._id);
-
-    setForm({
-      name: customer.name || "",
-      email: customer.email || "",
-      phone: customer.phone || "",
-      company: customer.company || "",
-    });
-
-    setFormError("");
-    setOpen(true);
-  };
-
-
-  /* =======================================================
-     CLOSE FORM
-     ======================================================= */
-
-  const closeForm = () => {
-    if (saving) {
+  /*
+   * Open create drawer.
+   */
+  const startCreate = () => {
+    if (!canCreate) {
       return;
     }
 
-    setOpen(false);
-    setEdit(null);
-    setForm(initialForm);
+    setEditing(null);
+    setForm({ ...blank });
     setFormError("");
+    setOpen(true);
   };
 
+  /*
+   * Open edit drawer.
+   */
+  const startEdit = (item) => {
+    if (!canEdit) {
+      return;
+    }
 
-  /* =======================================================
-     UPDATE FORM
-     ======================================================= */
+    setEditing(item.id || item._id);
 
-  const updateField = (field, value) => {
-    setForm((previous) => ({
-      ...previous,
-      [field]: value,
-    }));
+    setForm({
+      name: item.name || "",
+      email: item.email || "",
+      phone: item.phone || "",
+      company: item.company || "",
+      status: item.status || "active",
+    });
+
+    setFormError("");
+    setOpen(true);
   };
 
-
-  /* =======================================================
-     SUBMIT
-     ======================================================= */
-
-  const submit = async (event) => {
+  /*
+   * Create or update customer.
+   */
+  const save = async (event) => {
     event.preventDefault();
 
-    setFormError("");
-
-    const name =
-      form.name.trim();
-
-    const email =
-      form.email.trim();
-
-    const phone =
-      form.phone.trim();
-
-    const company =
-      form.company.trim();
-
-    if (!name) {
-      setFormError(
-        "Full name is required."
-      );
+    /*
+     * Frontend permission check.
+     */
+    if (!editing && !canCreate) {
+      setFormError("You do not have permission to create customers.");
       return;
     }
 
-    if (!email) {
-      setFormError(
-        "Email address is required."
-      );
-      return;
-    }
-
-    if (!phone) {
-      setFormError(
-        "Phone number is required."
-      );
+    if (editing && !canEdit) {
+      setFormError("You do not have permission to edit customers.");
       return;
     }
 
     setSaving(true);
+    setFormError("");
 
     try {
-      const payload = {
-        name,
-        email,
-        phone,
-        company,
-      };
-
-      if (edit) {
-        await api.patch(
-          `/customers/${edit}`,
-          payload
-        );
-      } else {
-        await api.post(
-          "/customers",
-          payload
-        );
+      /*
+       * Required fields.
+       */
+      if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
+        throw new Error("Name, email, and phone are required.");
       }
 
-      setOpen(false);
-      setEdit(null);
-      setForm(initialForm);
+      /*
+       * Basic email validation.
+       */
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+      if (!emailPattern.test(form.email.trim())) {
+        throw new Error("Please enter a valid email address.");
+      }
+
+      /*
+       * Clean payload before sending.
+       */
+      const payload = {
+        name: form.name.trim(),
+        email: form.email.trim().toLowerCase(),
+        phone: form.phone.trim(),
+        company: form.company.trim(),
+        status: form.status,
+      };
+
+      if (editing) {
+        await api.patch(`/customers/${editing}`, payload);
+      } else {
+        await api.post("/customers", payload);
+      }
+
+      /*
+       * Close drawer.
+       */
+      setOpen(false);
+      setEditing(null);
+      setForm({ ...blank });
+      setFormError("");
+
+      /*
+       * Reload customers.
+       */
       await load();
-    } catch (error) {
-      setFormError(
-        getErrorMessage(
-          error,
-          "Could not save customer."
-        )
-      );
+    } catch (err) {
+      setFormError(getErrorMessage(err, "Could not save customer."));
     } finally {
       setSaving(false);
     }
   };
 
+  /*
+   * Delete customer.
+   */
+  const remove = async () => {
+    if (!pendingDelete) {
+      return;
+    }
 
-  /* =======================================================
-     DELETE
-     ======================================================= */
+    if (!canDelete) {
+      setPendingDelete(null);
 
-  const confirmDelete = async () => {
-    if (!remove?._id) {
+      setError("You do not have permission to delete customers.");
+
+      return;
+    }
+
+    const customerId = pendingDelete.id || pendingDelete._id;
+
+    if (!customerId) {
+      setPendingDelete(null);
+
+      setError("Customer ID is missing.");
+
       return;
     }
 
     try {
-      await api.delete(
-        `/customers/${remove._id}`
-      );
+      await api.delete(`/customers/${customerId}`);
 
-      setRemove(null);
+      setPendingDelete(null);
 
       await load();
-    } catch (error) {
-      setError(
-        getErrorMessage(
-          error,
-          "Could not delete customer."
-        )
-      );
+    } catch (err) {
+      setPendingDelete(null);
 
-      setRemove(null);
+      setError(getErrorMessage(err, "Could not delete customer."));
     }
   };
 
+  /*
+   * Close drawer.
+   */
+  const closeDrawer = () => {
+    if (saving) {
+      return;
+    }
 
-  /* =======================================================
-     RENDER
-     ======================================================= */
+    setOpen(false);
+    setEditing(null);
+    setForm({ ...blank });
+    setFormError("");
+  };
 
   return (
     <div className="page">
-
-      {/* ===================================================
-          HEADER
-          =================================================== */}
-
-      <header className="page-header">
-
+      {/* ================================
+          PAGE HEADER
+      ================================= */}
+      <div className="page-header">
         <div>
-          <h1 className="page-title">
-            Customers
-          </h1>
+          <div className="eyebrow">Customer directory</div>
 
-          <p className="page-subtitle">
-            Manage people and companies, contact
-            details, and customer records.
+          <h1 className="page-title">Customers</h1>
+
+          <p className="page-description">
+            Keep customer records, contact details and status organized.
           </p>
         </div>
 
+        <div className="page-actions">
+          <span className="record-count">{filtered.length} records</span>
 
-        {canCreate && (
-          <div className="actions">
-            <Button onClick={openNewCustomer}>
-              <Plus size={17} />
+          {canCreate && (
+            <Button onClick={startCreate}>
+              <Plus size={16} />
               Add customer
             </Button>
-          </div>
-        )}
-
-      </header>
-
-      <div className="page-summary">
-        {summaryStats.map((stat) => (
-          <div key={stat.label} className="summary-card">
-            <div>
-              <div className="summary-label">{stat.label}</div>
-              <div className="summary-value">{stat.value}</div>
-              <div className="summary-trend">{stat.trend}</div>
-            </div>
-            <div className="brand-mark">
-              <Users size={18} />
-            </div>
-          </div>
-        ))}
+          )}
+        </div>
       </div>
 
+      {/* ================================
+          CUSTOMER ROLE NOTICE
+      ================================= */}
+      {role === "customer" && (
+        <div className="page-alert">
+          You are viewing your customer profile. Customer records can only be
+          created or managed by authorized CRM staff.
+        </div>
+      )}
 
-      {/* ===================================================
-          FORM
-          =================================================== */}
+      {/* ================================
+          ERROR
+      ================================= */}
+      {error && <div className="page-alert">{error}</div>}
 
+      {/* ================================
+          CUSTOMER PANEL
+      ================================= */}
+      <section className="panel data-panel">
+        {/* TOOLBAR */}
+        <div className="toolbar">
+          <label className="search-control">
+            <Search size={16} />
+
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search customers..."
+              aria-label="Search customers"
+            />
+          </label>
+
+          <div className="toolbar-filters">
+            <Select
+              id="customer-status"
+              label="Status"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
+              <option value="all">All statuses</option>
+
+              <option value="active">Active</option>
+
+              <option value="inactive">Inactive</option>
+            </Select>
+          </div>
+        </div>
+
+        {/* ================================
+            LOADING
+        ================================= */}
+        {loading ? (
+          <SkeletonRows count={7} />
+        ) : filtered.length === 0 ? (
+          /* ================================
+             EMPTY
+          ================================= */
+          <EmptyState
+            icon={Users}
+            title={
+              query || status !== "all"
+                ? "No customers found"
+                : "No customers yet"
+            }
+            description={
+              query || status !== "all"
+                ? "Try changing your search or filter."
+                : canCreate
+                  ? "Add a customer to build your directory."
+                  : "Your customer profile will appear here."
+            }
+            action={
+              canCreate && !query && status === "all" ? (
+                <Button onClick={startCreate}>
+                  <Plus size={15} />
+                  Add customer
+                </Button>
+              ) : null
+            }
+          />
+        ) : (
+          <>
+            {/* ================================
+                DESKTOP TABLE
+            ================================= */}
+            <div className="desktop-table-wrap">
+              <table className="crm-table">
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+
+                    <th>Company</th>
+
+                    <th>Contact</th>
+
+                    <th>Status</th>
+
+                    {(canEdit || canDelete) && (
+                      <th className="align-right">Actions</th>
+                    )}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {filtered.map((item) => {
+                    const customerId = item.id || item._id;
+
+                    return (
+                      <tr key={customerId}>
+                        {/* CUSTOMER */}
+                        <td>
+                          <div className="person-cell">
+                            <div className="avatar">{initials(item.name)}</div>
+
+                            <div>
+                              <div className="cell-primary">{item.name}</div>
+
+                              <div className="cell-secondary">{item.email}</div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* COMPANY */}
+                        <td>
+                          <span className="cell-primary">
+                            {item.company || "—"}
+                          </span>
+                        </td>
+
+                        {/* CONTACT */}
+                        <td>
+                          <div className="cell-secondary">
+                            {item.phone || "—"}
+                          </div>
+                        </td>
+
+                        {/* STATUS */}
+                        <td>
+                          <StatusBadge value={item.status || "active"} />
+                        </td>
+
+                        {/* ACTIONS */}
+                        {(canEdit || canDelete) && (
+                          <td>
+                            <div className="row-actions">
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  className="icon-button"
+                                  onClick={() => startEdit(item)}
+                                  aria-label={`Edit ${item.name}`}
+                                  title="Edit customer"
+                                >
+                                  <Pencil size={15} />
+                                </button>
+                              )}
+
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  className="icon-button danger-icon"
+                                  onClick={() => setPendingDelete(item)}
+                                  aria-label={`Delete ${item.name}`}
+                                  title="Delete customer"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                className="icon-button"
+                                aria-label={`More actions for ${item.name}`}
+                                title="More actions"
+                              >
+                                <MoreHorizontal size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ================================
+                MOBILE CARDS
+            ================================= */}
+            <div className="mobile-record-list">
+              {filtered.map((item) => {
+                const customerId = item.id || item._id;
+
+                return (
+                  <article className="record-card" key={customerId}>
+                    <div className="person-cell">
+                      <div className="avatar">{initials(item.name)}</div>
+
+                      <div>
+                        <div className="cell-primary">{item.name}</div>
+
+                        <div className="cell-secondary">{item.email}</div>
+                      </div>
+                    </div>
+
+                    <div className="record-details">
+                      <span>{item.company || "No company"}</span>
+
+                      <span>{item.phone || "No phone"}</span>
+                    </div>
+
+                    <div className="record-footer">
+                      <StatusBadge value={item.status || "active"} />
+
+                      {(canEdit || canDelete) && (
+                        <div className="row-actions">
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className="icon-button"
+                              onClick={() => startEdit(item)}
+                              aria-label={`Edit ${item.name}`}
+                              title="Edit customer"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                          )}
+
+                          {canDelete && (
+                            <button
+                              type="button"
+                              className="icon-button danger-icon"
+                              onClick={() => setPendingDelete(item)}
+                              aria-label={`Delete ${item.name}`}
+                              title="Delete customer"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* ================================
+          CREATE / EDIT DRAWER
+      ================================= */}
       {open && (
         <div
-          className="card"
-          style={{ marginBottom: 18 }}
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeDrawer();
+            }
+          }}
         >
+          <div
+            className="drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="customer-drawer-title"
+          >
+            {/* DRAWER HEADER */}
+            <div className="drawer-header">
+              <div>
+                <div className="eyebrow">
+                  {editing ? "Edit record" : "New record"}
+                </div>
 
-          <div className="card-header">
+                <h2 id="customer-drawer-title">
+                  {editing ? "Edit customer" : "Add customer"}
+                </h2>
+              </div>
 
-            <strong>
-              {edit
-                ? "Update customer"
-                : "New customer"}
-            </strong>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={closeDrawer}
+                aria-label="Close"
+                title="Close"
+              >
+                ×
+              </button>
+            </div>
 
-          </div>
+            {/* FORM */}
+            <form className="drawer-body" onSubmit={save}>
+              {formError && <div className="form-error">{formError}</div>}
 
-
-          <div className="card-body">
-
-            {formError && (
-              <Banner>
-                {formError}
-              </Banner>
-            )}
-
-
-            <form
-              className="form-grid"
-              onSubmit={submit}
-            >
-
-              {/* Name */}
-
+              {/* NAME */}
               <TextInput
                 id="customer-name"
                 label="Full name"
+                name="name"
                 value={form.name}
                 onChange={(event) =>
-                  updateField(
-                    "name",
-                    event.target.value
-                  )
+                  setForm({
+                    ...form,
+                    name: event.target.value,
+                  })
                 }
-                placeholder="Enter full name"
+                placeholder="Jane Cooper"
                 required
+                disabled={saving}
               />
 
-
-              {/* Email */}
-
+              {/* EMAIL */}
               <TextInput
                 id="customer-email"
-                label="Email address"
+                label="Email"
                 type="email"
+                name="email"
                 value={form.email}
                 onChange={(event) =>
-                  updateField(
-                    "email",
-                    event.target.value
-                  )
+                  setForm({
+                    ...form,
+                    email: event.target.value,
+                  })
                 }
-                placeholder="customer@example.com"
+                placeholder="jane@company.com"
                 required
+                disabled={saving}
               />
 
-
-              {/* Phone */}
-
+              {/* PHONE */}
               <TextInput
                 id="customer-phone"
                 label="Phone"
                 type="tel"
+                name="phone"
                 value={form.phone}
                 onChange={(event) =>
-                  updateField(
-                    "phone",
-                    event.target.value
-                  )
+                  setForm({
+                    ...form,
+                    phone: event.target.value,
+                  })
                 }
-                placeholder="+91 XXXXX XXXXX"
+                placeholder="+91 98765 43210"
                 required
+                disabled={saving}
               />
 
-
-              {/* Company */}
-
+              {/* COMPANY */}
               <TextInput
                 id="customer-company"
                 label="Company"
+                name="company"
                 value={form.company}
                 onChange={(event) =>
-                  updateField(
-                    "company",
-                    event.target.value
-                  )
+                  setForm({
+                    ...form,
+                    company: event.target.value,
+                  })
                 }
-                placeholder="Company name"
+                placeholder="Acme Inc."
+                disabled={saving}
               />
 
+              {/* STATUS */}
+              <Select
+                id="customer-status-form"
+                label="Status"
+                value={form.status}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    status: event.target.value,
+                  })
+                }
+                disabled={saving}
+              >
+                <option value="active">Active</option>
 
-              {/* Actions */}
+                <option value="inactive">Inactive</option>
+              </Select>
 
-              <div className="form-actions form-full">
+              {/* ACTIONS */}
+              <div className="drawer-actions">
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={closeDrawer}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
 
-                <Button
+                <button
                   type="submit"
+                  className="button button-primary"
                   disabled={saving}
                 >
                   {saving
                     ? "Saving..."
-                    : edit
+                    : editing
                       ? "Save changes"
                       : "Add customer"}
-                </Button>
-
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={closeForm}
-                  disabled={saving}
-                >
-                  Cancel
-                </Button>
-
+                </button>
               </div>
-
             </form>
-
           </div>
-
         </div>
       )}
 
-
-      {/* ===================================================
-          CUSTOMER LIST
-          =================================================== */}
-
-      <section className="card">
-
-        {/* Toolbar */}
-
-        <div className="toolbar">
-
-          <div className="search-wrap">
-
-            <Search size={17} />
-
-            <input
-              className="search-input"
-              aria-label="Search customers"
-              placeholder="Search name, email, phone, or company"
-              value={query}
-              onChange={(event) =>
-                setQuery(event.target.value)
-              }
-            />
-
-          </div>
-
-          <div className="toolbar-meta">
-            <span>{filtered.length} shown</span>
-          </div>
-
-        </div>
-
-
-        {/* Loading */}
-
-        {loading && (
-          <SkeletonRows />
-        )}
-
-
-        {/* Error */}
-
-        {!loading && error && (
-          <ErrorState
-            message={error}
-            onRetry={load}
-          />
-        )}
-
-
-        {/* Empty */}
-
-        {!loading &&
-          !error &&
-          filtered.length === 0 && (
-            <EmptyState
-              icon={Users}
-              title={
-                query
-                  ? "No matching customers"
-                  : "No customers yet"
-              }
-              description={
-                query
-                  ? "Try a different search term."
-                  : "Add a customer to keep contact details in one place."
-              }
-              action={
-                !query &&
-                canCreate ? (
-                  <Button
-                    onClick={
-                      openNewCustomer
-                    }
-                  >
-                    <Plus size={15} />
-                    Add customer
-                  </Button>
-                ) : null
-              }
-            />
-          )}
-
-
-        {/* Table */}
-
-        {!loading &&
-          !error &&
-          filtered.length > 0 && (
-
-            <div className="table-wrap">
-
-              <table>
-
-                <thead>
-
-                  <tr>
-                    <th>Customer</th>
-                    <th>Contact</th>
-                    <th>Company</th>
-                    <th>Created</th>
-                    <th>Actions</th>
-                  </tr>
-
-                </thead>
-
-
-                <tbody>
-
-                  {filtered.map(
-                    (customer) => (
-
-                      <tr
-                        key={customer._id}
-                      >
-
-                        {/* Customer */}
-
-                        <td>
-                          <div className="table-leading">
-                            <span className="text-strong">
-                              {customer.name}
-                            </span>
-                            <span className="item-meta">
-                              {customer.company || "No company listed"}
-                            </span>
-                          </div>
-                        </td>
-
-
-                        {/* Contact */}
-
-                        <td>
-
-                          <div className="table-leading">
-                            <span>{customer.email || "No email"}</span>
-                            <span className="item-meta">{customer.phone || "No phone"}</span>
-                          </div>
-
-                        </td>
-
-
-                        {/* Company */}
-
-                        <td>
-                          <span className={customer.company ? "table-tag" : "table-tag table-tag-muted"}>
-                            {customer.company || "No company"}
-                          </span>
-                        </td>
-
-
-                        {/* Created */}
-
-                        <td>
-                          {customer.createdAt
-                            ? new Date(
-                                customer.createdAt
-                              ).toLocaleDateString()
-                            : "—"}
-                        </td>
-
-
-                        {/* Actions */}
-
-                        <td>
-
-                          <div className="table-actions">
-
-                            {/* Edit */}
-
-                            {canEdit && (
-                              <button
-                                type="button"
-                                className="icon-btn"
-                                aria-label={`Edit ${customer.name}`}
-                                onClick={() =>
-                                  editCustomer(
-                                    customer
-                                  )
-                                }
-                              >
-                                <Pencil
-                                  size={16}
-                                />
-                              </button>
-                            )}
-
-
-                            {/* Delete */}
-
-                            {canDelete && (
-                              <button
-                                type="button"
-                                className="icon-btn"
-                                aria-label={`Delete ${customer.name}`}
-                                onClick={() =>
-                                  setRemove(
-                                    customer
-                                  )
-                                }
-                              >
-                                <Trash2
-                                  size={16}
-                                />
-                              </button>
-                            )}
-
-                          </div>
-
-                        </td>
-
-                      </tr>
-
-                    )
-                  )}
-
-                </tbody>
-
-              </table>
-
-            </div>
-
-          )}
-
-      </section>
-
-
-      {/* ===================================================
+      {/* ================================
           DELETE CONFIRMATION
-          =================================================== */}
-
+      ================================= */}
       <ConfirmDialog
-        open={Boolean(remove)}
-        title="Delete customer"
+        open={Boolean(pendingDelete)}
+        title="Delete customer?"
         message={
-          remove
-            ? `Delete “${remove.name}”? This action cannot be undone.`
+          pendingDelete
+            ? `This will permanently remove ${pendingDelete.name}.`
             : ""
         }
-        confirmLabel="Delete"
+        confirmLabel="Delete customer"
         danger
-        onCancel={() =>
-          setRemove(null)
-        }
-        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={remove}
       />
-
     </div>
   );
 }
